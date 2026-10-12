@@ -247,7 +247,159 @@ def _(Counter, mo, pages):
 @app.cell
 def _(mo):
     mo.md("""
-    ## 5. Review checklist (beyond related-link filtering)
+    ## 5. Candidate links to crawl next
+
+    Every sidebar and body link found so far, deduplicated. Filter, select rows, then
+    write them to `links_next.txt` (same format as `links.txt`, so `crawler fetch --links links_next.txt` works).
+    """)
+    return
+
+
+@app.cell
+def _(Path, pages):
+    from urllib.parse import urlparse as _urlparse
+
+    def link_type(url):
+        _path = _urlparse(url).path.lower()
+        if _path.endswith((".pdf", ".doc", ".docx", ".xls", ".xlsx", ".zip", ".rar", ".ppt", ".pptx")):
+            return "file"
+        if _path.endswith(".html"):
+            return "page"
+        return "other"
+
+    def norm(url):
+        return url.replace("http://", "https://").replace("://rd.go.th", "://www.rd.go.th").rstrip("/")
+
+    _seen_urls = {norm(_l.strip()) for _l in Path("links.txt").read_text().splitlines() if _l.strip()}
+    _seen_urls |= {norm(_p["url"]) for _p in pages}
+
+    _cand = {}
+    for _p in pages:
+        for _src, _links in (("sidebar", _p["related_links"]), ("body", _p["content_links"])):
+            for _l in _links:
+                _u = norm(_l["url"])
+                _c = _cand.setdefault(_u, {"url": _u, "title": _l["title"], "sources": set(), "linked_from": {}})
+                _c["sources"].add(_src)
+                _c["linked_from"].setdefault(_p["id"], set()).add(_src)
+                if len(_l["title"]) > len(_c["title"]):
+                    _c["title"] = _l["title"]
+
+    _heading = {_p["id"]: _p["heading"] for _p in pages}
+
+    def _parent_summary(parents, max_titles=2, max_len=24):
+        _ids = sorted(parents)
+        _titles = [_heading[_i] if len(_heading[_i]) <= max_len else _heading[_i][:max_len] + "…" for _i in _ids[:max_titles]]
+        return f"{len(_ids)}: " + "; ".join(_titles) + (" …" if len(_ids) > max_titles else "")
+
+    candidates = [
+        {
+            "url": _c["url"],
+            "title": _c["title"][:90],
+            "type": link_type(_c["url"]),
+            "domain": _urlparse(_c["url"]).netloc,
+            "source": "+".join(sorted(_c["sources"])),
+            "n_pages": len(_c["linked_from"]),
+            "linked_from": _parent_summary(_c["linked_from"]),
+            "crawled": _c["url"] in _seen_urls,
+        }
+        for _c in _cand.values()
+    ]
+    candidates.sort(key=lambda r: (-r["n_pages"], r["url"]))
+    parents_of = {_u: _c["linked_from"] for _u, _c in _cand.items()}  # url -> {parent id: {sources}}
+    return candidates, parents_of
+
+
+@app.cell
+def _(candidates, mo, pages):
+    def _opts(key):
+        return sorted({r[key] for r in candidates})
+
+    f_type = mo.ui.multiselect(_opts("type"), value=["page"], label="Type")
+    f_source = mo.ui.multiselect(_opts("source"), value=_opts("source"), label="Found in")
+    f_domain = mo.ui.multiselect(_opts("domain"), value=["www.rd.go.th"], label="Domain")
+    f_new = mo.ui.checkbox(value=True, label="Hide already crawled")
+    f_text = mo.ui.text(placeholder="title or URL contains…", label="Search")
+    _label = {f"{_p['id']} · {_p['kind']} · {_p['heading'][:40]}": _p["id"] for _p in pages}
+    f_parent = mo.ui.multiselect(_label, value=list(_label), label="Linked from page", full_width=True)
+    f_max = mo.ui.slider(1, max(r["n_pages"] for r in candidates), value=1, label="Min. pages linking")
+    mo.vstack([
+        mo.hstack([f_type, f_source, f_domain], justify="start", gap=2),
+        mo.hstack([f_text, f_max, f_new], justify="start", gap=2, align="end"),
+        f_parent,
+    ])
+    return f_domain, f_max, f_new, f_parent, f_source, f_text, f_type
+
+
+@app.cell
+def _(
+    candidates,
+    f_domain,
+    f_max,
+    f_new,
+    f_parent,
+    f_source,
+    f_text,
+    f_type,
+    mo,
+    parents_of,
+):
+    _q = f_text.value.strip().lower()
+    _parent_ids = set(f_parent.value)
+    filtered = [
+        r for r in candidates
+        if r["type"] in f_type.value
+        and _parent_ids & set(parents_of[r["url"]])
+        and r["source"] in f_source.value
+        and r["domain"] in f_domain.value
+        and r["n_pages"] >= f_max.value
+        and not (f_new.value and r["crawled"])
+        and (not _q or _q in r["title"].lower() or _q in r["url"].lower())
+    ]
+    table = mo.ui.table(filtered, selection="multi", page_size=25, label=f"{len(filtered)} of {len(candidates)} candidates (tick rows to crawl next)")
+    # Separate from the table's selection, so viewing parents never changes what gets written.
+    view_link = mo.ui.dropdown(
+        {f"{r['title'][:50] or r['url']} · {r['n_pages']}p · {r['url'].rsplit('/', 1)[-1]}": r["url"] for r in filtered[:500]},
+        value=None, searchable=True, label="View parents of", full_width=True,
+    )
+    mo.vstack([view_link, table])
+    return table, view_link
+
+
+@app.cell
+def _(mo, pages, parents_of, view_link):
+    mo.stop(view_link.value is None)
+    _by_id = {_p["id"]: _p for _p in pages}
+    _rows = [
+        {"parent": _id, "kind": _by_id[_id]["kind"], "heading": _by_id[_id]["heading"][:70],
+         "via": "+".join(sorted(_srcs)), "breadcrumb": " > ".join(_by_id[_id]["breadcrumb"][-2:])}
+        for _id, _srcs in sorted(parents_of[view_link.value].items())
+    ]
+    mo.vstack([mo.md(f"**{len(_rows)} parent page(s)** of `{view_link.value}`"), mo.ui.table(_rows, selection=None, page_size=10)])
+    return
+
+
+@app.cell
+def _(mo, table):
+    _n = len(table.value)
+    out_path = mo.ui.text(value="links_next.txt", label="Output file")
+    write_btn = mo.ui.run_button(label=f"Write {_n} selected links", disabled=_n == 0)
+    mo.hstack([out_path, write_btn], justify="start", gap=2, align="end")
+    return out_path, write_btn
+
+
+@app.cell
+def _(Path, mo, out_path, table, write_btn):
+    mo.stop(not write_btn.value)
+    _urls = [r["url"] for r in table.value]
+    Path(out_path.value).write_text("\n".join(_urls) + "\n")
+    mo.md(f"Wrote **{len(_urls)}** URLs to `{out_path.value}`")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("""
+    ## 6. Review checklist (beyond related-link filtering)
 
     1. **Staleness / superseded content**: check `year` column. Multiple tax years (e.g. 2560 deduction table vs current) may conflict.
        Decide whether to keep `last_update` as metadata and whether to drop or flag old pages.
