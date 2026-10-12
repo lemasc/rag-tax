@@ -11,3 +11,4 @@ wheels/
 
 # Crawled data
 data/raw/
+__marimo__/
