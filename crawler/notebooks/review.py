@@ -283,7 +283,7 @@ def _(Path, pages):
         return "other"
 
     def norm(url):
-        return url.replace("http://", "https://").replace("://rd.go.th", "://www.rd.go.th").rstrip("/")
+        return url.replace("http://", "https://").replace("://rd.go.th", "://www.rd.go.th").replace("://cmsinteradmin.rd.go.th", "://www.rd.go.th").rstrip("/")
 
     _seen_urls = {norm(_l.strip()) for _l in Path("links.txt").read_text().splitlines() if _l.strip()}
     _seen_urls |= {norm(_p["url"]) for _p in pages}

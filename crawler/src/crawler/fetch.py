@@ -29,7 +29,7 @@ def read_links(path: Path) -> list[str]:
 
 def norm(url: str) -> str:
     """Same URL normalisation as notebooks/review.py, so decisions match links.txt."""
-    return url.replace("http://", "https://").replace("://rd.go.th", "://www.rd.go.th").rstrip("/")
+    return url.replace("http://", "https://").replace("://rd.go.th", "://www.rd.go.th").replace("://cmsinteradmin.rd.go.th", "://www.rd.go.th").rstrip("/")
 
 
 def read_decisions(path: Path, tiers: list[str] = ()) -> list[str]:
