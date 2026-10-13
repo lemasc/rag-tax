@@ -249,8 +249,9 @@ def _(mo):
     mo.md("""
     ## 5. Candidate links to crawl next
 
-    Every sidebar and body link found so far, deduplicated. Filter, select rows, then
-    write them to `links_next.txt` (same format as `links.txt`, so `crawler fetch --links links_next.txt` works).
+    Every sidebar and body link found so far, deduplicated. Filter, select rows, pick a decision
+    (**crawl** / **defer** / **drop**) and apply. Decisions are saved to `data/link_decisions.csv`
+    and decided links are hidden from the table (also on the next run). To undo a decision, delete its row from the CSV.
     """)
     return
 
@@ -310,6 +311,23 @@ def _(Path, pages):
 
 
 @app.cell
+def _(Path, mo):
+    import csv
+
+    DECISIONS_PATH = Path("data/link_decisions.csv")
+    DECISION_FIELDS = ["url", "decision", "tier", "title", "type", "domain", "n_pages", "decided_at"]
+
+    def load_decisions():
+        if not DECISIONS_PATH.exists():
+            return {}
+        with DECISIONS_PATH.open(encoding="utf-8", newline="") as _f:
+            return {_r["url"]: _r for _r in csv.DictReader(_f)}
+
+    get_decisions, set_decisions = mo.state(load_decisions())
+    return DECISIONS_PATH, DECISION_FIELDS, csv, get_decisions, set_decisions
+
+
+@app.cell
 def _(candidates, mo, pages):
     def _opts(key):
         return sorted({r[key] for r in candidates})
@@ -318,16 +336,33 @@ def _(candidates, mo, pages):
     f_source = mo.ui.multiselect(_opts("source"), value=_opts("source"), label="Found in")
     f_domain = mo.ui.multiselect(_opts("domain"), value=["www.rd.go.th"], label="Domain")
     f_new = mo.ui.checkbox(value=True, label="Hide already crawled")
+    f_status = mo.ui.multiselect(
+        ["undecided", "crawl", "defer", "drop"], value=["undecided"], label="Decision status",
+    )
     f_text = mo.ui.text(placeholder="title or URL contains…", label="Search")
     _label = {f"{_p['id']} · {_p['kind']} · {_p['heading'][:40]}": _p["id"] for _p in pages}
     f_parent = mo.ui.multiselect(_label, value=list(_label), label="Linked from page", full_width=True)
     f_max = mo.ui.slider(1, max(r["n_pages"] for r in candidates), value=1, label="Min. pages linking")
+    # Lives here (not next to the apply button) so ticking rows doesn't reset it.
+    action = mo.ui.radio(["crawl", "defer", "drop"], value="crawl", inline=True, label="Decision for selected")
+    tier = mo.ui.text(value="later", label="Defer tier name")
     mo.vstack([
-        mo.hstack([f_type, f_source, f_domain], justify="start", gap=2),
+        mo.hstack([f_type, f_source, f_domain, f_status], justify="start", gap=2),
         mo.hstack([f_text, f_max, f_new], justify="start", gap=2, align="end"),
         f_parent,
     ])
-    return f_domain, f_max, f_new, f_parent, f_source, f_text, f_type
+    return (
+        action,
+        f_domain,
+        f_max,
+        f_new,
+        f_parent,
+        f_source,
+        f_status,
+        f_text,
+        f_type,
+        tier,
+    )
 
 
 @app.cell
@@ -338,16 +373,30 @@ def _(
     f_new,
     f_parent,
     f_source,
+    f_status,
     f_text,
     f_type,
+    get_decisions,
     mo,
     parents_of,
 ):
     _q = f_text.value.strip().lower()
     _parent_ids = set(f_parent.value)
+    _decided = get_decisions()
+
+    def _status(url):
+        return _decided[url]["decision"] if url in _decided else "undecided"
+
+    def _decision_label(url):
+        if url not in _decided:
+            return ""
+        _d = _decided[url]
+        return f"{_d['decision']}: {_d['tier']}" if _d.get("tier") else _d["decision"]
+
     filtered = [
-        r for r in candidates
-        if r["type"] in f_type.value
+        {**r, "decision": _decision_label(r["url"])} for r in candidates
+        if _status(r["url"]) in f_status.value
+        and r["type"] in f_type.value
         and _parent_ids & set(parents_of[r["url"]])
         and r["source"] in f_source.value
         and r["domain"] in f_domain.value
@@ -355,7 +404,7 @@ def _(
         and not (f_new.value and r["crawled"])
         and (not _q or _q in r["title"].lower() or _q in r["url"].lower())
     ]
-    table = mo.ui.table(filtered, selection="multi", page_size=25, label=f"{len(filtered)} of {len(candidates)} candidates (tick rows to crawl next)")
+    table = mo.ui.table(filtered, selection="multi", page_size=25, label=f"{len(filtered)} of {len(candidates)} candidates ({len(_decided)} decided in total; pick statuses above to show them)")
     # Separate from the table's selection, so viewing parents never changes what gets written.
     view_link = mo.ui.dropdown(
         {f"{r['title'][:50] or r['url']} · {r['n_pages']}p · {r['url'].rsplit('/', 1)[-1]}": r["url"] for r in filtered[:500]},
@@ -379,20 +428,54 @@ def _(mo, pages, parents_of, view_link):
 
 
 @app.cell
-def _(mo, table):
+def _(action, mo, table, tier):
     _n = len(table.value)
-    out_path = mo.ui.text(value="links_next.txt", label="Output file")
-    write_btn = mo.ui.run_button(label=f"Write {_n} selected links", disabled=_n == 0)
-    mo.hstack([out_path, write_btn], justify="start", gap=2, align="end")
-    return out_path, write_btn
+    _tier = tier.value.strip()
+    _is_defer = action.value == "defer"
+    _label = f"Apply 'defer: {_tier}'" if _is_defer else f"Apply '{action.value}'"
+    write_btn = mo.ui.run_button(
+        label=f"{_label} to {_n} selected",
+        disabled=_n == 0 or (_is_defer and not _tier),
+    )
+    mo.hstack([action, tier if _is_defer else mo.md(""), write_btn], justify="start", gap=2, align="end")
+    return (write_btn,)
 
 
 @app.cell
-def _(Path, mo, out_path, table, write_btn):
+def _(
+    DECISIONS_PATH,
+    DECISION_FIELDS,
+    action,
+    csv,
+    datetime,
+    mo,
+    set_decisions,
+    table,
+    tier,
+    write_btn,
+):
     mo.stop(not write_btn.value)
-    _urls = [r["url"] for r in table.value]
-    Path(out_path.value).write_text("\n".join(_urls) + "\n")
-    mo.md(f"Wrote **{len(_urls)}** URLs to `{out_path.value}`")
+    _now = datetime.now().isoformat(timespec="seconds")
+    _tier = tier.value.strip() if action.value == "defer" else ""
+    _new = {
+        r["url"]: {
+            **{k: r[k] for k in ("url", "title", "type", "domain", "n_pages")},
+            "decision": action.value, "tier": _tier, "decided_at": _now,
+        }
+        for r in table.value
+    }
+
+    def _merge(current):
+        merged = {**current, **_new}
+        DECISIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with DECISIONS_PATH.open("w", encoding="utf-8", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=DECISION_FIELDS)
+            w.writeheader()
+            w.writerows(merged.values())
+        return merged
+
+    set_decisions(_merge)  # re-runs the filter cell, so these rows disappear from the table
+    mo.md(f"Marked **{len(_new)}** link(s) as `{action.value}{': ' + _tier if _tier else ''}` in `{DECISIONS_PATH}`")
     return
 
 
