@@ -31,13 +31,14 @@ def _(Path, json, mo):
 def _(datetime, mo, pages, re):
     def kind(_p):
         t = _p["text"] or ""
-        if re.match(r"\s*มาตรา|หมวด", _p["heading"]):
+        # Must be numbered ("มาตรา 38", "หมวด 3"): "หมวดค่าลดหย่อนบุตร" is a Q&A category, not a statute.
+        if re.match(r"\s*(มาตรา|หมวด|ลักษณะ)\s*\d", _p["heading"]):
             return "statute"
         if len(_p["content_links"]) >= 50:
             return "index/list"
         if re.search(r"\|\s*เลขที่หนังสือ\s*\|", t):  # rulings have it as a table row; plain text also matches หนังสือเดินทาง
             return "ruling (หนังสือตอบข้อหารือ)"
-        if re.search(r"^Q\d+\s*:", t, re.M):
+        if re.search(r"^(Q\d+|คำถาม)\s*:", t, re.M):
             return "FAQ"
         return "article"
 
@@ -83,7 +84,7 @@ def _(datetime, mo, pages):
 
     rows = [
         {
-            "id": _p["id"], "kind": _p["kind"], "role": _p["role"], "tax_year": _p["tax_year"], "heading": _p["heading"][:60],
+            "id": _p["id"], "url": _p["url"], "kind": _p["kind"], "role": _p["role"], "tax_year": _p["tax_year"], "heading": _p["heading"][:60],
             "batch": _p["batch"], "fetched": (_p.get("fetched_at") or "")[:16].replace("T", " "),
             "chars": _p["n_chars"], "updated": _p["last_update"], "year": year(_p),
             "body_links": len(_p["content_links"]), "side_links": len(_p["related_links"]),
@@ -270,7 +271,7 @@ def _(get_page_decisions, mo, pages, pf_kind, pf_role, pf_status, pf_year):
     _decided = get_page_decisions()
     page_rows = [
         {
-            "id": _p["id"], "decision": _decided[_p["id"]]["decision"] if _p["id"] in _decided else "",
+            "id": _p["id"], "url": _p["url"], "decision": _decided[_p["id"]]["decision"] if _p["id"] in _decided else "",
             "note": _decided[_p["id"]]["note"] if _p["id"] in _decided else "",
             "kind": _p["kind"], "role": _p["role"], "tax_year": _p["tax_year"], "updated": _p["last_update"],
             "chars": _p["n_chars"], "heading": _p["heading"][:60],
