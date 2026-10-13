@@ -2,6 +2,7 @@
 
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urldefrag, urljoin
 
@@ -73,7 +74,10 @@ def parse_all(links: list[str], raw_dir: Path, out: Path, raw_path) -> list[dict
         if not p.exists():
             print("missing raw", url)
             continue
-        records.append(parse_page(url, p.read_bytes()))
+        rec = parse_page(url, p.read_bytes())
+        # Download time = raw file mtime (fetch writes it once; --force refreshes it).
+        rec["fetched_at"] = datetime.fromtimestamp(p.stat().st_mtime).isoformat(timespec="seconds")
+        records.append(rec)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", encoding="utf-8") as f:
         for r in records:
