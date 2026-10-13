@@ -29,14 +29,14 @@ def _(Path, json, mo):
 
 
 @app.cell
-def _(mo, pages, re):
+def _(datetime, mo, pages, re):
     def kind(_p):
         t = _p["text"] or ""
         if re.match(r"\s*มาตรา|หมวด", _p["heading"]):
             return "statute"
         if len(_p["content_links"]) >= 50:
             return "index/list"
-        if re.search(r"เลขที่หนังสือ", t):
+        if re.search(r"\|\s*เลขที่หนังสือ\s*\|", t):  # rulings have it as a table row; plain text also matches หนังสือเดินทาง
             return "ruling (หนังสือตอบข้อหารือ)"
         if re.search(r"^Q\d+\s*:", t, re.M):
             return "FAQ"
@@ -44,6 +44,15 @@ def _(mo, pages, re):
 
     for _p in pages:
         _p["kind"] = kind(_p)
+
+    # Crawl batches: pages fetched within 5 minutes of each other share a batch number.
+    _prev, _n = None, 0
+    for _p in sorted(pages, key=lambda _p: _p.get("fetched_at") or ""):
+        _t = datetime.fromisoformat(_p["fetched_at"]) if _p.get("fetched_at") else None
+        if _t is None or _prev is None or (_t - _prev).total_seconds() > 300:
+            _n += 1
+        _p["batch"] = _n
+        _prev = _t
 
     mo.md("## 1. Overview: page type, size, freshness")
     return
@@ -58,6 +67,7 @@ def _(datetime, mo, pages):
     rows = [
         {
             "id": _p["id"], "kind": _p["kind"], "heading": _p["heading"][:60],
+            "batch": _p["batch"], "fetched": (_p.get("fetched_at") or "")[:16].replace("T", " "),
             "chars": _p["n_chars"], "updated": _p["last_update"], "year": year(_p),
             "body_links": len(_p["content_links"]), "side_links": len(_p["related_links"]),
             "breadcrumb": " > ".join(_p["breadcrumb"][-3:]),
@@ -72,8 +82,12 @@ def _(datetime, mo, pages):
 def _(Counter, mo, rows):
     kinds = Counter(r["kind"] for r in rows)
     years = Counter(r["year"] for r in rows)
+    _batches = {}
+    for r in rows:
+        _batches.setdefault(r["batch"], []).append(r["fetched"])
     mo.md(
-        "**By kind:** " + ", ".join(f"{k}: {v}" for k, v in kinds.most_common())
+        "**By crawl batch:** " + ", ".join(f"#{b}: {len(v)} pages ({min(v)})" for b, v in sorted(_batches.items()))
+        + "\n\n**By kind:** " + ", ".join(f"{k}: {v}" for k, v in kinds.most_common())
         + "\n\n**By last-update year:** " + ", ".join(f"{k}: {v}" for k, v in sorted(years.items(), key=lambda x: str(x[0])))
         + "\n\n> Review: do you want rulings/old pages treated differently? "
         "Tax law changes yearly, so stale pages (2020) can contradict newer ones."
