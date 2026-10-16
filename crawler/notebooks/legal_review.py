@@ -23,6 +23,7 @@ def _(Path, csv, hashlib, mo):
     RAW = Path("data/raw/legal")
     catalog = list(csv.DictReader(open("data/legal_catalog.csv", encoding="utf-8")))
     scan = {r["url"]: r for r in csv.DictReader(open("data/legal_scan.csv", encoding="utf-8"))}
+    core = {r["url"]: r for r in csv.DictReader(open("data/legal_core.csv", encoding="utf-8"))}
 
     def group(r):
         """Proposed action, from tier + reason + full-text scan (see docs/plans/legal-source-crawl.md)."""
@@ -51,8 +52,37 @@ def _(Path, csv, hashlib, mo):
         r["chars"] = int(s["chars"]) if s else None
         r["file"] = s.get("file")
         r["ext"] = r["url"].rsplit(".", 1)[-1]
-    mo.md(f"# Legal-source review\n**{len(catalog)} documents** in `data/legal_catalog.csv`; {len(scan)} A/B documents full-text scanned.")
-    return RAW, catalog, scan
+        c = core.get(r["url"], {})
+        r["core"], r["text"], r["year"] = c.get("decision", ""), c.get("text", ""), c.get("year", "")
+    mo.md(f"# Legal-source review\n**{len(catalog)} documents** in `data/legal_catalog.csv`; {len(scan)} A/B documents full-text scanned; "
+          f"**{len(core)}** in the core set `data/legal_core.csv`.")
+    return RAW, catalog, core, scan
+
+
+@app.cell
+def _(Counter, core, mo):
+    _keep = [r for r in core.values() if r["decision"] == "keep"]
+    _text = Counter(r["text"] for r in _keep)
+    _kind = Counter(r["kind"].split(":")[0] for r in _keep)
+    mo.md(f"""
+    ## 0. Core set (what goes into the corpus)
+
+    **Scope rule:** only documents the Code itself cites from ม.38–64 (`cited = 1`, built by `uv run python -m crawler.legal_core`).
+    Everything else in the catalogue is out of scope unless an evaluation question needs it. Sections 1 and 4 below are kept as the record of how the 2,200 candidates were narrowed.
+
+    - **{len(core)}** cited → **{len(_keep)} keep**, {len(core) - len(_keep)} drop
+    - text: {_text["ok"]} ok · {_text["garbled"]} garbled (broken PDF font encoding → needs OCR) · {_text["missing"]} not downloaded
+    - by kind: {", ".join(f"{k} {n}" for k, n in _kind.most_common())}
+
+    **Decisions and caveats**
+
+    - *Dropped:* the ม.47(7)(ข) charity list (`2644.html`, 122K chars of organisation names) — would flood retrieval and answers nothing.
+    - *Not duplicates:* `dg457A`/`dg459A` and `dg438A`/`3186.html` share a listing title but are base notice + amendment.
+    - *Mislabelled:* `2502.html` is listed as กฎกระทรวง ฉบับที่ 380 but holds the consolidated ฉบับที่ 126 (2509) with amendments — the main ม.42(17) exemption list.
+    - *Amendment chains* (e.g. ป.อ. 101→396 loan interest, 193→242 disabled dependants, 146/186/240 WHT certificate, 243/292/326/328 filing) are kept whole with their `year`; retrieving a superseded link is a known failure mode, not resolved by hand.
+    - *Garbled text* passed the old 150-char OCR check; `text` is now set by a common-word density check (garbled = 0 per 1k chars, real text ≥ 8).
+    """)
+    return
 
 
 @app.cell
@@ -67,7 +97,7 @@ def _(Counter, catalog, mo):
     _tot = [sum(_cnt[(k, g)] for k in _kinds) for g in _groups]
     _table += "| **all** | " + " | ".join(f"**{x}**" for x in _tot) + f" | **{sum(_tot)}** |\n"
     mo.md(f"""
-    ## 1. Overview: what the filter proposes
+    ## 1. How candidates were narrowed: what the tier filter proposed
 
     {_table}
 
@@ -83,30 +113,34 @@ def _(Counter, catalog, mo):
 def _(mo):
     mo.md("""
     ## 2. Browse and filter the catalogue
+
+    Opens on the core set; untick it to browse the whole catalogue.
     """)
     return
 
 
 @app.cell
 def _(catalog, mo):
+    f_core = mo.ui.checkbox(value=True, label="Core set only")
     f_kind = mo.ui.multiselect(sorted({r["kind"] for r in catalog}), label="Kind")
-    f_group = mo.ui.multiselect(sorted({r["group"] for r in catalog}), value=["keep (cited by Code)", "keep (A)", "keep (B)", "review (B, corp-heavy)", "review (B, floor rule, no PIT text)"], label="Proposed")
+    f_group = mo.ui.multiselect(sorted({r["group"] for r in catalog}), label="Proposed")
     f_text = mo.ui.text(label="Title contains", placeholder="e.g. ลดหย่อน, บริจาค, มาตรา 47")
-    mo.hstack([f_kind, f_group, f_text], justify="start", gap=2, wrap=True)
-    return f_group, f_kind, f_text
+    mo.hstack([f_core, f_kind, f_group, f_text], justify="start", gap=2, wrap=True)
+    return f_core, f_group, f_kind, f_text
 
 
 @app.cell
-def _(catalog, f_group, f_kind, f_text, mo):
+def _(catalog, f_core, f_group, f_kind, f_text, mo):
     shown = [
         r for r in catalog
-        if (not f_kind.value or r["kind"] in f_kind.value)
+        if (not f_core.value or r["core"])
+        and (not f_kind.value or r["kind"] in f_kind.value)
         and (not f_group.value or r["group"] in f_group.value)
         and (not f_text.value or f_text.value in r["title"])
     ]
     table = mo.ui.table(
         [
-            {"kind": r["kind"], "tier": r["tier"], "was": r["tier_v1"], "reason": r["reason"], "group": r["group"], "pit": r["pit"], "corp": r["corp"],
+            {"core": r["core"], "text": r["text"], "year": r["year"], "kind": r["kind"], "tier": r["tier"], "was": r["tier_v1"], "reason": r["reason"], "group": r["group"], "pit": r["pit"], "corp": r["corp"],
              "chars": r["chars"], "title": r["title"][:140], "url": r["url"]}
             for r in shown
         ],
@@ -150,10 +184,12 @@ def _(RAW, catalog, hashlib, mo, re, subprocess, table):
         _body = (
             mo.md("**No extractable text — image-only PDF. Needs OCR.** " + _pdf)
             if len(_text) < 150
+            else mo.md("**Garbled text layer (broken font encoding). Needs OCR.** " + _pdf)
+            if _r["text"] == "garbled"
             else mo.ui.text_area(_text, rows=28, full_width=True, disabled=True)
         )
         mo.output.replace(mo.vstack([
-            mo.md(f"### {_r['title']}\n`{_r['kind']}` · tier **{_r['tier']}** · proposed **{_r['group']}** · "
+            mo.md(f"### {_r['title']}\n" + (f"core **{_r['core']}** · {_r['year'] or 'no year'} · " if _r["core"] else "") + f"`{_r['kind']}` · tier **{_r['tier']}** · proposed **{_r['group']}** · "
                   f"PIT hits {_r['pit']} / corp hits {_r['corp']} · {_r['chars']} chars · {_pdf}"),
             _body,
         ]))
@@ -163,9 +199,9 @@ def _(RAW, catalog, hashlib, mo, re, subprocess, table):
 @app.cell
 def _(mo):
     mo.md("""
-    ## 4. Sampling the borderline groups
+    ## 4. Sampling the borderline groups (narrowing record)
 
-    Spot-check before trusting the filter. Each table shows 25 random-ish rows (every n-th) from the group.
+    Spot-check of the tier filter, kept as evidence for the narrowing step; not needed for the core set. Each table shows 25 random-ish rows (every n-th) from the group.
     """)
     return
 
@@ -193,7 +229,9 @@ def _(catalog, mo):
 @app.cell
 def _(mo):
     mo.md("""
-    ## 5. Other places to collect from (not yet downloaded)
+    ## 5. Other places to collect from — deferred
+
+    Not planned. Revisit only if an evaluation question has no source in the corpus.
 
     | Source | Page / how | Why |
     |---|---|---|
