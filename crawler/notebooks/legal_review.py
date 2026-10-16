@@ -24,6 +24,7 @@ def _(Path, csv, hashlib, mo):
     catalog = list(csv.DictReader(open("data/legal_catalog.csv", encoding="utf-8")))
     scan = {r["url"]: r for r in csv.DictReader(open("data/legal_scan.csv", encoding="utf-8"))}
     core = {r["url"]: r for r in csv.DictReader(open("data/legal_core.csv", encoding="utf-8"))}
+    extracted = {r["url"]: r for r in csv.DictReader(open("data/legal_text.csv", encoding="utf-8"))}
 
     def group(r):
         """Proposed action, from tier + reason + full-text scan (see docs/plans/legal-source-crawl.md)."""
@@ -56,7 +57,7 @@ def _(Path, csv, hashlib, mo):
         r["core"], r["text"], r["year"] = c.get("decision", ""), c.get("text", ""), c.get("year", "")
     mo.md(f"# Legal-source review\n**{len(catalog)} documents** in `data/legal_catalog.csv`; {len(scan)} A/B documents full-text scanned; "
           f"**{len(core)}** in the core set `data/legal_core.csv`.")
-    return RAW, catalog, core, scan
+    return RAW, catalog, core, extracted, scan
 
 
 @app.cell
@@ -159,7 +160,7 @@ def _(mo):
 
 
 @app.cell
-def _(RAW, catalog, hashlib, mo, re, subprocess, table):
+def _(Path, RAW, catalog, extracted, hashlib, mo, re, subprocess, table):
     _TH = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
 
     def extract(url: str) -> str:
@@ -179,10 +180,14 @@ def _(RAW, catalog, hashlib, mo, re, subprocess, table):
     else:
         _url = table.value[0]["url"]
         _r = next(r for r in catalog if r["url"] == _url)
-        _text = extract(_url)
-        _pdf = f"[open original]({_url})"
+        _x = extracted.get(_url, {})
+        _cached = _x.get("status") == "ok"
+        _text = Path("data/text/legal", _x["file"]).read_text(encoding="utf-8") if _cached else extract(_url)
+        _pdf = f"[open original]({_url})" + (f" · text from `data/text/legal/{_x['file']}` ({_x['method']})" if _cached else "")
         _body = (
-            mo.md("**No extractable text — image-only PDF. Needs OCR.** " + _pdf)
+            mo.ui.text_area(_text, rows=28, full_width=True, disabled=True)
+            if _cached
+            else mo.md("**No extractable text — image-only PDF. Needs OCR.** " + _pdf)
             if len(_text) < 150
             else mo.md("**Garbled text layer (broken font encoding). Needs OCR.** " + _pdf)
             if _r["text"] == "garbled"
