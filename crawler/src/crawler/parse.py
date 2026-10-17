@@ -10,6 +10,7 @@ import trafilatura
 from lxml import html as lh
 
 BASE = "https://www.rd.go.th/"
+INLINE = {"strong", "b", "em", "i", "u", "span", "font", "a"}
 
 
 def _links(root, base: str) -> list[dict]:
@@ -27,6 +28,21 @@ def _links(root, base: str) -> list[dict]:
     return out
 
 
+def _wrap_bare_inline(main) -> None:
+    """Wrap inline elements that are direct children of a <div> in <p>.
+
+    Trafilatura drops text with no block element around it. rd.go.th/60061 has the last paragraph of an answer as a
+    bare <strong> after the </p> that closes the answer. On the 76 pages crawled so far this changes only that page;
+    the other bare fragments (visitor counters, "<< กลับ") are still dropped.
+    """
+    for div in list(main.iter("div")):
+        for child in list(div):
+            if child.tag in INLINE and "".join(child.itertext()).strip():
+                p = lh.Element("p")
+                child.addprevious(p)
+                p.append(child)  # moves the child together with its tail text
+
+
 def parse_page(url: str, raw: bytes) -> dict:
     doc = lh.fromstring(raw)
     first = lambda xp: (doc.xpath(xp) or [None])[0]
@@ -40,6 +56,7 @@ def parse_page(url: str, raw: bytes) -> dict:
     # Trafilatura returns nothing for a bare <div> fragment, so wrap it as a document.
     text = None
     if main is not None:
+        _wrap_bare_inline(main)
         wrapped = f"<html><body><article>{lh.tostring(main, encoding='unicode')}</article></body></html>"
         text = trafilatura.extract(
             wrapped, url=url, favor_recall=True, include_tables=True,

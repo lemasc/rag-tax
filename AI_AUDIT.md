@@ -22,12 +22,14 @@ Findings where AI output was wrong or needed correcting. One section per finding
 - **Fix:** `normalize` maps them to curly quotes; a test checks every legal file and that none are left behind. Quote style is otherwise left as found: the source also uses `"` and sometimes closes a quote with `“` (`13481.html`), so a quote-balance test would have tested the source, not the repair.
 - **Files:** `crawler/src/crawler/clean/text.py`, `crawler/tests/test_text.py`
 
-## Trafilatura truncated an FAQ answer (not fixed)
+## Trafilatura dropped a paragraph from an FAQ answer (fixed)
 
-- **What happened:** `60061.html` lost the tail of its first answer (the paragraph on a spouse's social-security contributions). The first-pass extraction was reviewed as "fine" on page-level checks, and nothing flagged it.
+- **What happened:** `60061.html` is missing the last paragraph of its item 4 (ชื่อเรื่อง 4): "if the spouse also paid social-security contributions all year, the taxpayer may deduct those too (ม.47(1)(ฌ))". The extracted answer stops one paragraph early and reads as if only the taxpayer's own contributions count. The first-pass extraction was reviewed as "fine" on page-level checks, and nothing flagged it.
 - **How it was caught:** comparing each text node of the raw `col-main` with the extracted text. Of 15 pages with unmatched fragments, 14 were page chrome ("Untitled Document", visitor counter) and one was this content loss.
-- **Fix:** none yet. It is recorded in `KNOWN_ISSUES` and pinned by a test. Repairing it means changing `parse.py`, which re-extracts every page.
-- **Files:** `crawler/src/crawler/clean/audit.py`, `crawler/src/crawler/clean/build.py`, `crawler/tests/test_audit.py`
+- **A second error, caught later:** the first write-up (code comment, this log, the notebook) said trafilatura "cut the tail of the first answer". That was wrong on both counts: it is the last item, and a whole paragraph is missing rather than a sentence cut off. Found when asked to explain the issue, by printing the raw nodes next to the extracted unit. I also guessed the cause was a `<strong>` inside a `<p>`; the real shape is different (below).
+- **Cause (verified):** the paragraph is a bare `<strong>` that is a direct child of the page's `<div>`, with no `<p>` around it (it follows the `</p>` that closes the answer). Wrapping that one node in a `<p>` before calling trafilatura makes the paragraph come out; `favor_precision` and `no_fallback` do not. Re-extracting all 76 pages with the current settings reproduces `pages.jsonl` exactly, and re-extracting with bare inline children of a `<div>` wrapped in `<p>` changes exactly one page (`60061`, +244 characters). The other bare inline fragments in the corpus are page chrome ("<< กลับ", visitor counters) and stay dropped.
+- **Fix:** `parse._wrap_bare_inline` wraps inline elements that are direct children of a `<div>` in `<p>` before extraction. `pages.jsonl` was regenerated: one record differs (`60061`, `text` only). A test on the real page fails without the fix, and another re-parses every raw page and compares with `pages.jsonl`. A first attempt at a synthetic-HTML test passed even with the fix disabled (trafilatura's choice depends on the whole page), so it was dropped.
+- **Files:** `crawler/src/crawler/parse.py`, `crawler/tests/test_parse.py`, `crawler/tests/test_audit.py`
 
 ## Exploratory regexes reported FAQ defects that were not there
 

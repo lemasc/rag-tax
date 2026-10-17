@@ -19,9 +19,7 @@ DATA = Path("data")
 OUT = DATA / "clean"
 
 # Source-side defects we know about and do not repair here. Keyed by doc_id; surfaced in `flags`.
-KNOWN_ISSUES = {
-    "60061": "extraction_truncated: trafilatura cut the tail of the first answer (social-security deduction, spouse paragraph)",
-}
+KNOWN_ISSUES: dict[str, str] = {}  # nothing outstanding; 60061 was fixed in parse._wrap_bare_inline
 
 
 def page_docs() -> tuple[list[dict], list[dict]]:
