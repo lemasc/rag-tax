@@ -44,3 +44,10 @@ Findings where AI output was wrong or needed correcting. One section per finding
 - **How it was caught:** printing the distinct section values for those two pages.
 - **Fix:** numbered mode applies only when the page's first heading is numbered. Unnumbered pages guess the last short line (at most 40 characters) and flag `section_guessed`; all 30 guesses are listed in the notebook for review. A property test checks that units, preamble and cut headings reproduce each page with no text lost or added.
 - **Files:** `crawler/src/crawler/clean/units.py` (`_split_clearcut`), `crawler/tests/test_faq_units.py`
+
+## Gazette page headers survived the extraction cleanup
+
+- **What happened:** `extract.py` strips Royal Gazette running headers with a regex that knows `เล่ม … ตอน …`, a bare `หน้า N` and a bare `ราชกิจจานุเบกษา`. It misses two shapes: pdftotext writes the tone mark out of order (`เลม่ 136 ตอนที่ 79 ก`, 19 lines in 9 documents), and Typhoon OCR keeps `หน้า 3 ราชกิจจานุเบกษา` on one line (`mr396`). The publication date also comes back at the start of every page (46 header lines in 17 of 28 PDF-derived documents). My coverage audit reported these documents as clean because its own header pattern had the same blind spot.
+- **How it was caught:** by you, reading the OCR output next to the PDFs (page headers mostly gone, but the date repeated). A scan for header-like lines in all PDF-derived text then found the `เลม่` shape.
+- **Fix:** `crawler.clean.gazette.strip_page_headers` handles both shapes, keeps the first standalone date as `gazette_date` (it is the publication date, needed for "effective the day after publication") and drops identical repeats. Applied in the clean stage, so no OCR re-run. `extract.py` still has the narrower regex.
+- **Files:** `crawler/src/crawler/clean/gazette.py`, `crawler/tests/test_gazette.py`, `crawler/src/crawler/clean/build.py`

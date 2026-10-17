@@ -12,6 +12,7 @@ from collections import Counter
 from pathlib import Path
 
 from crawler.clean import classify
+from crawler.clean.gazette import strip_page_headers
 from crawler.clean.text import normalize
 from crawler.clean.units import split_faq, split_statute
 
@@ -54,10 +55,14 @@ def legal_docs() -> list[dict]:
         if c is None or r["status"] != "ok":
             continue
         text = normalize((DATA / "text" / "legal" / r["file"]).read_text(encoding="utf-8"))
+        gazette_date, removed = None, []
+        if r["method"] in ("pdftotext", "ocr"):
+            text, gazette_date, removed = strip_page_headers(text)
         docs.append(dict(
             doc_id=Path(r["file"]).stem, source="legal", url=r["url"], kind=c["kind"].split(":")[0], role="content", include=True,
             title=c["title"], breadcrumb=[], last_update=None, tax_year=None, year=c["year"] or None,
             text_method=r["method"], preamble="", n_units=0, n_chars=len(text), flags=[], text=text,
+            gazette_date=gazette_date, n_header_lines_removed=len(removed),
         ))
     return docs
 

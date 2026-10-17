@@ -16,9 +16,20 @@ def _():
 
     import marimo as mo
 
+    from crawler.clean.gazette import strip_page_headers
     from crawler.clean.text import normalize
 
-    return Counter, Path, csv, hashlib, html, json, mo, normalize, re
+    return (
+        Path,
+        csv,
+        hashlib,
+        html,
+        json,
+        mo,
+        normalize,
+        re,
+        strip_page_headers,
+    )
 
 
 @app.cell
@@ -140,7 +151,20 @@ def _(mo):
 
 
 @app.cell
-def _(by_id, html, mo, normalize, original_text, pdf_path, pre_clean_text, re, scroll, table, visible):
+def _(
+    by_id,
+    html,
+    mo,
+    normalize,
+    original_text,
+    pdf_path,
+    pre_clean_text,
+    re,
+    scroll,
+    strip_page_headers,
+    table,
+    visible,
+):
     mo.stop(not table.value, mo.md("*Select a document in the table above.*"))
     d = by_id[table.value[0]["id"]]
     cleaned = d["text"]
@@ -150,7 +174,8 @@ def _(by_id, html, mo, normalize, original_text, pdf_path, pre_clean_text, re, s
     _head = mo.md(
         f"**{d['title']}**  \n"
         f"`{d['doc_id']}` · {d['source']} · **{d['kind']}** · role {d['role']} · text via **{d['text_method']}** · "
-        f"{d['n_chars']:,} chars · {d['n_units']} units · year {d.get('year') or d.get('tax_year') or '?'} · [open online]({d['url']})"
+        f"{d['n_chars']:,} chars · {d['n_units']} units · year {d.get('year') or d.get('tax_year') or '?'}"
+        + (f" · Gazette date {d['gazette_date']}" if d.get("gazette_date") else "") + f" · [open online]({d['url']})"
     )
     _notes = []
     if d["text_method"] == "ocr":
@@ -176,12 +201,19 @@ def _(by_id, html, mo, normalize, original_text, pdf_path, pre_clean_text, re, s
         _c = normalize(_ln)
         if _ln.strip() and " ".join(_ln.split()) != _c:  # ignore whitespace-only differences
             _changes.append((visible(_ln.strip()), _c))
+    _hdr = strip_page_headers(normalize(_raw))[2] if d["text_method"] in ("pdftotext", "ocr") else []
+    _hdr_note = (
+        mo.md(f"**{len(_hdr)} Royal Gazette page-header line(s) removed** (the first date is kept as `gazette_date`): "
+              + ", ".join(f"`{h}`" for h in _hdr))
+        if _hdr else mo.md("*No page-header lines removed.*")
+    )
     _rows = "".join(
         f'<div style="margin:6px 0;font-size:13px"><div style="background:#fde8e8;padding:2px 6px;white-space:pre-wrap">− {html.escape(a)}</div>'
         f'<div style="background:#e6f4ea;padding:2px 6px;white-space:pre-wrap">+ {html.escape(b)}</div></div>'
         for a, b in _changes[:200]
     )
     diff = mo.vstack([
+        _hdr_note,
         mo.md(f"**{len(_changes)} line(s) changed** by `normalize` beyond whitespace trimming"
               + (" (first 200 shown)" if len(_changes) > 200 else "")
               + ". `⍽` = no-break space, `⟨xNN⟩` = control character, `⟨zw⟩` = zero-width space."),
@@ -204,7 +236,7 @@ def _(by_id, html, mo, normalize, original_text, pdf_path, pre_clean_text, re, s
 
     tabs = mo.ui.tabs({"Side by side": side, "Cleaned only": scroll(cleaned, "75vh"), "What cleaning changed": diff, "Numbers": numbers})
     mo.vstack([_head, *_notes, tabs])
-    return (d,)
+    return
 
 
 @app.cell
