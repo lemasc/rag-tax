@@ -19,7 +19,7 @@ def _():
 
 
 @app.cell
-def _(Path, csv, hashlib, mo):
+def _(Path, csv, mo):
     RAW = Path("data/raw/legal")
     catalog = list(csv.DictReader(open("data/legal_catalog.csv", encoding="utf-8")))
     scan = {r["url"]: r for r in csv.DictReader(open("data/legal_scan.csv", encoding="utf-8"))}
@@ -55,15 +55,19 @@ def _(Path, csv, hashlib, mo):
         r["ext"] = r["url"].rsplit(".", 1)[-1]
         c = core.get(r["url"], {})
         r["core"], r["text"], r["year"] = c.get("decision", ""), c.get("text", ""), c.get("year", "")
+        _x = extracted.get(r["url"])
+        # where the corpus text comes from: html | pdftotext | ocr, or "deferred" when the source can't be fetched
+        r["source"] = "" if _x is None else _x["method"] if _x["status"] == "ok" else "deferred"
     mo.md(f"# Legal-source review\n**{len(catalog)} documents** in `data/legal_catalog.csv`; {len(scan)} A/B documents full-text scanned; "
           f"**{len(core)}** in the core set `data/legal_core.csv`.")
-    return RAW, catalog, core, extracted, scan
+    return RAW, catalog, core, extracted
 
 
 @app.cell
-def _(Counter, core, mo):
+def _(Counter, core, extracted, mo):
     _keep = [r for r in core.values() if r["decision"] == "keep"]
-    _text = Counter(r["text"] for r in _keep)
+    _crawl = Counter(r["text"] for r in _keep)
+    _src = Counter(extracted[r["url"]]["method"] if extracted[r["url"]]["status"] == "ok" else "deferred" for r in _keep)
     _kind = Counter(r["kind"].split(":")[0] for r in _keep)
     mo.md(f"""
     ## 0. Core set (what goes into the corpus)
@@ -72,7 +76,8 @@ def _(Counter, core, mo):
     Everything else in the catalogue is out of scope unless an evaluation question needs it. Sections 1 and 4 below are kept as the record of how the 2,200 candidates were narrowed.
 
     - **{len(core)}** cited → **{len(_keep)} keep**, {len(core) - len(_keep)} drop
-    - text: {_text["ok"]} ok · {_text["garbled"]} garbled (broken PDF font encoding → needs OCR) · {_text["missing"]} not downloaded
+    - **text source** (`data/legal_text.csv`, final text in `data/text/legal/`): {_src["html"]} html · {_src["pdftotext"]} direct PDF extraction · {_src["ocr"]} OCR (Typhoon) · {_src["deferred"]} deferred
+    - crawl-time check on the raw files, before extraction: {_crawl["ok"]} ok · {_crawl["garbled"]} garbled (broken PDF font encoding, fixed by OCR) · {_crawl["missing"]} not downloaded
     - by kind: {", ".join(f"{k} {n}" for k, n in _kind.most_common())}
 
     **Decisions and caveats**
@@ -81,6 +86,7 @@ def _(Counter, core, mo):
     - *Not duplicates:* `dg457A`/`dg459A` and `dg438A`/`3186.html` share a listing title but are base notice + amendment.
     - *Mislabelled:* `2502.html` is listed as กฎกระทรวง ฉบับที่ 380 but holds the consolidated ฉบับที่ 126 (2509) with amendments — the main ม.42(17) exemption list.
     - *Amendment chains* (e.g. ป.อ. 101→396 loan interest, 193→242 disabled dependants, 146/186/240 WHT certificate, 243/292/326/328 filing) are kept whole with their `year`; retrieving a superseded link is a known failure mode, not resolved by hand.
+    - *Deferred:* พ.ร.ฎ. 260 (`rd.go.th/2394`) and 270 (`rd.go.th/2390`) return HTTP 500, so they have no text and are left out of the corpus until the pages come back.
     - *Garbled text* passed the old 150-char OCR check; `text` is now set by a common-word density check (garbled = 0 per 1k chars, real text ≥ 8).
     """)
     return
@@ -141,7 +147,7 @@ def _(catalog, f_core, f_group, f_kind, f_text, mo):
     ]
     table = mo.ui.table(
         [
-            {"core": r["core"], "text": r["text"], "year": r["year"], "kind": r["kind"], "tier": r["tier"], "was": r["tier_v1"], "reason": r["reason"], "group": r["group"], "pit": r["pit"], "corp": r["corp"],
+            {"core": r["core"], "source": r["source"], "raw text": r["text"], "year": r["year"], "kind": r["kind"], "tier": r["tier"], "was": r["tier_v1"], "reason": r["reason"], "group": r["group"], "pit": r["pit"], "corp": r["corp"],
              "chars": r["chars"], "title": r["title"][:140], "url": r["url"]}
             for r in shown
         ],
@@ -183,10 +189,12 @@ def _(Path, RAW, catalog, extracted, hashlib, mo, re, subprocess, table):
         _x = extracted.get(_url, {})
         _cached = _x.get("status") == "ok"
         _text = Path("data/text/legal", _x["file"]).read_text(encoding="utf-8") if _cached else extract(_url)
-        _pdf = f"[open original]({_url})" + (f" · text from `data/text/legal/{_x['file']}` ({_x['method']})" if _cached else "")
+        _pdf = f"[open original]({_url})" + (f" · text from `data/text/legal/{_x['file']}`" if _cached else "")
         _body = (
             mo.ui.text_area(_text, rows=28, full_width=True, disabled=True)
             if _cached
+            else mo.md("**Deferred: the source page can't be downloaded** (" + _x["note"] + "). " + _pdf)
+            if _x.get("status") == "failed"
             else mo.md("**No extractable text — image-only PDF. Needs OCR.** " + _pdf)
             if len(_text) < 150
             else mo.md("**Garbled text layer (broken font encoding). Needs OCR.** " + _pdf)
@@ -194,7 +202,7 @@ def _(Path, RAW, catalog, extracted, hashlib, mo, re, subprocess, table):
             else mo.ui.text_area(_text, rows=28, full_width=True, disabled=True)
         )
         mo.output.replace(mo.vstack([
-            mo.md(f"### {_r['title']}\n" + (f"core **{_r['core']}** · {_r['year'] or 'no year'} · " if _r["core"] else "") + f"`{_r['kind']}` · tier **{_r['tier']}** · proposed **{_r['group']}** · "
+            mo.md(f"### {_r['title']}\n" + (f"core **{_r['core']}** · text source **{_r['source'] or 'n/a'}** · {_r['year'] or 'no year'} · " if _r["core"] else "") + f"`{_r['kind']}` · tier **{_r['tier']}** · proposed **{_r['group']}** · "
                   f"PIT hits {_r['pit']} / corp hits {_r['corp']} · {_r['chars']} chars · {_pdf}"),
             _body,
         ]))
