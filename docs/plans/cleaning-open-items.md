@@ -22,6 +22,12 @@ Status: started 2026-10-17. Tracks details that did not resolve while building `
 
 **Blocks:** the instrument/ruling/article splitters, which need paragraph structure first.
 
+**Update 2026-10-18 (`4fc4156`):** split *words* (not wrapped lines) are now rejoined by `clean/rejoin.py`, and three tone-mark misorders are repaired in pdftotext text. Line unwrapping itself is still not done. Findings from that pass:
+
+- **pdftotext Thai is damaged beyond line breaks.** Out-of-dictionary newmm tokens per 1k Thai tokens, median per legal document: pdftotext 37.4 (17 docs), HTML 13.4 (82), OCR 6.5 (11). Besides split words it has tone marks out of order (`หนา้`, `ชือ่`), a vowel one consonant too late (`หกั`, `ทงั้`) and dropped tone marks (`เงินได`). The rules repair only the never-valid tone positions (37 repairs); the rest stays. **Open choice:** keep the rules, or re-OCR the 17 pdftotext documents with Typhoon and compare (an experiment for a later session; needs the vLLM server). OCR trades these defects for possible hallucination (next point).
+- **OCR hallucination in `mr401A`** (`bf11914513ac`, กฎกระทรวง ฉบับที่ 401): `อ๋าถอด` appears 74 times where the printed text says `อำเภอ`, in the province/district lists (e.g. `อ๋าถอดแม่แจ่ม`). Not a line-break problem; nothing repairs it. Re-OCR that page or patch it by hand; check other OCR documents for similar repeated junk with the same OOV count.
+- **The first join rule over-merged.** Joining whenever newmm finds a word across the break proposed ~800 joins, most of them real phrase spaces in clean HTML (`แล้ว จะ` -> `วจะ`, `นาย ก` -> `นายก`). The committed rule joins only at a non-word fragment or a mark that cannot start a syllable: 132 joins in pdftotext, 5 in HTML, 0 in OCR. Known miss: `รหัส ผ่า น` (`8d6b68bf1ac8`) stays split because `ผ่า` is itself a word.
+
 ### 2. Splitters for instruments, rulings, คำวินิจฉัย and articles
 
 **State:** not started; deferred on purpose. Only FAQ items and statute sections have unit boundaries.
@@ -85,12 +91,6 @@ Status: started 2026-10-17. Tracks details that did not resolve while building `
 - `notebooks/.ipynb_checkpoints/` is untracked and not ignored.
 - `crawler/.playwright/` is untracked and predates this work.
 
-### 11. U+FFFD in source HTML
-
-**State:** not handled. 21 replacement characters in the cleaned text: 20 in `61065`, 1 in `61117`. They are already in the raw HTML (rd.go.th served them), mostly where a space belongs. The character-class profile missed them because Python counts U+FFFD as printable.
-
-**Fix:** map U+FFFD to a space in `normalize`, with a test over the corpus. `61065` is dropped anyway (see Decisions), so only `61117` is affected downstream.
-
 ## Decisions
 
 Recorded in `crawler/data/unit_decisions.csv` (one row per dropped document or unit, with what it duplicates). Nothing reads the file yet; the chunker should apply it. Unit ids are positional (`62149#025`), so the file must be re-checked if the FAQ splitter changes.
@@ -100,6 +100,7 @@ Recorded in `crawler/data/unit_decisions.csv` (one row per dropped document or u
 
 ## Resolved
 
+- **U+FFFD in source HTML** (21 characters: 20 in `61065`, 1 in `61117`; already in the raw HTML, missed by the character-class profile because Python counts U+FFFD as printable): mapped to a space in `normalize`, `61ce262`.
 - **60061 dropped a paragraph** (bare `<strong>` outside any `<p>` dropped by trafilatura): fixed in `parse._wrap_bare_inline`, `f0223db`.
 - **Gazette page headers left in PDF-derived text** (`เลม่ …`, OCR `หน้า N ราชกิจจานุเบกษา`, repeated page dates): fixed in `clean/gazette.py`, `28628f5`.
 - **cp1252 quotes left as control characters** in 38 legal files: fixed in `clean/text.py`, `d4907e7`.
