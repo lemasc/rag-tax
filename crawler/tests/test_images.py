@@ -8,6 +8,11 @@ from crawler import images
 from conftest import DATA
 
 
+@pytest.fixture(autouse=True)
+def _in_crawler_dir(monkeypatch):
+    monkeypatch.chdir(DATA.parent)  # crawler.images resolves data/ relative to the working directory
+
+
 def test_squash_ignores_markup_punctuation_and_thai_digits():
     assert images.squash("**ลดหย่อน** <b>๖๐,๐๐๐</b> บาท!") == "ลดหย่อน60000บาท"
 
