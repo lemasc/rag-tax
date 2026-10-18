@@ -62,9 +62,14 @@ def test_ocr_keeps_page_line_mr396():
 
 
 def test_document_without_headers_is_unchanged():
-    # mr397.pdf (OCR, 4 pages) has no standalone date line at all
+    text = "ข้อ 1 ก\nข้อ 2 ข"
+    assert strip_page_headers(text) == (text, None, [])
+
+
+def test_mr397_date_comes_from_the_volume_line():
+    # mr397.pdf (OCR, 4 pages): the date is only on the one-line "เล่ม … ราชกิจจานุเบกษา 10 มกราคม 2568" header, which extract once deleted
     out, date, removed = cleaned("mr397.pdf")
-    assert date is None and removed == []
+    assert date == "10 มกราคม 2568" and out.count(date) == 1 and removed
 
 
 def test_no_header_line_survives_in_any_pdf_derived_document():

@@ -30,7 +30,7 @@ def test_ocr_documents_in_the_built_corpus():
     if not path.exists():
         pytest.skip("data/clean not built")
     docs = [json.loads(l) for l in path.open(encoding="utf-8")]
-    ocr = [d for d in docs if d.get("text_method") == "ocr"]
+    ocr = [d for d in docs if d["source"] == "legal" and d["text_method"] == "ocr"]
     assert ocr, "no OCR documents"
     for d in ocr:
         assert "<!-- page" not in d["text"], d["doc_id"]

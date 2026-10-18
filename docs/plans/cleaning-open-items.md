@@ -60,6 +60,8 @@ Status: started 2026-10-17. Tracks details that did not resolve while building `
 
 **What is known:** 14 of 18 FAQ pages get a year. The other four (`66379`, `61081`, `63908`, `61065`) get `None`. Three of them are linked from a hub page whose heading carries a year (`28`: 2566, `63417`: 2565, `60578`: 2561), so inheriting from the parent is possible. `61081`'s parent (`37343`) has none. Correctness of the 14 years is unchecked.
 
+**Image documents:** `65908_0_lodyon68_update` (the 2568 allowance poster) has `tax_year=None` on purpose. Its heading `ลดหย่อนภาษี 2568` does not match the heuristic (`ภาษี 2568` has no `ปี`), and the body's `ปี พ.ศ.2561` (the child-birth year) would give a wrong 2561 if the body fallback ran. Set it by hand when the rule is settled.
+
 **What would settle it:** a hand check of the 14, then an inherit-from-hub rule for the rest.
 
 ### 6. Guessed FAQ section headings
@@ -86,6 +88,12 @@ Status: started 2026-10-17. Tracks details that did not resolve while building `
 
 **Options:** leave it (cleaned downstream), or share one pattern between the two modules and re-run extraction (OCR is cached, so no server is needed).
 
+### 11. OCR misreads in the `65908` poster
+
+**State:** `data/text/image/65908_0_lodyon68_update.md` is Typhoon's raw output, compared with the image by eye on 2026-10-18. Known defects: the first allowance line `ส่วนตัว 60,000 บาท` has no amount (the one `60,000 บาท` that follows is attached to `คู่สมรส`, which also has 60,000, so the personal allowance is lost); the brace label `ตามจริงไม่เกิน` over กบข. and the private-teacher fund is dropped; the `สถานพยาบาลของรัฐ` donation line is duplicated. The numbers that are present matched the image where checked.
+
+**What would settle it:** fix the text by hand (a correction layer for kept images, or re-OCR at another render size with `typhoon_ocr_file.py --dims`), then compare every amount with the image. Until then a question about the personal allowance should not be answered from this document alone.
+
 ### 10. Repo hygiene
 
 - `notebooks/.ipynb_checkpoints/` is untracked and not ignored.
@@ -102,6 +110,7 @@ Recorded in `crawler/data/unit_decisions.csv` (one row per dropped document or u
 
 - **pdftotext against OCR for the 17 pdftotext documents:** PDFs now use OCR by default, `b3087dd`. See the update under item 1.
 - **Page anchors (`<!-- page N -->`) stripped by `extract.normalise`:** kept in `data/text/legal/` and turned into `pages` offsets by `clean/pages.py` (`documents.jsonl`: `[[pdf page, start offset], ...]`, null for HTML). The number is the PDF page index, not the printed Gazette page. A word split across a page boundary is not rejoined. Open: nothing reads `pages` yet (the legal splitters, item 2, will). Typhoon's markdown (`**bold**`, `<table>`) is left in the text, as it already was for the first 11 OCR documents.
+- **Image-only content in HTML pages:** `crawler/images.py` finds, fetches and OCRs the images; `data/image_decisions.csv` decides which become documents (`source = "image"`), reviewed in `notebooks/image_review.py`. First decisions 2026-10-18: `65908` kept, `558` dropped (the page text covers the steps), banners and headings dropped; the Clear Cut infographics, the Q&A and refund tables and `61549`'s `image002` wait for the overlap check.
 - **Gazette date lost on OCR documents with a one-line volume+date header:** `gazette.py` and `extract.HEADER`; 4 more documents have a `gazette_date` (25 of 28).
 - **U+FFFD in source HTML** (21 characters: 20 in `61065`, 1 in `61117`; already in the raw HTML, missed by the character-class profile because Python counts U+FFFD as printable): mapped to a space in `normalize`, `61ce262`.
 - **60061 dropped a paragraph** (bare `<strong>` outside any `<p>` dropped by trafilatura): fixed in `parse._wrap_bare_inline`, `f0223db`.

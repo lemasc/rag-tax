@@ -65,3 +65,10 @@ Findings where AI output was wrong or needed correcting. One section per finding
 - **How it was caught:** diffing every field of `documents.jsonl` against the previous commit after the rebuild, instead of only checking the text.
 - **Fix:** `extract.HEADER` leaves volume lines that carry a date; `gazette.strip_page_headers` reduces them to the standalone date (kept once, repeats dropped). 25 of 28 PDF-derived documents now have a date, none lost.
 - **Files:** `crawler/src/crawler/extract.py`, `crawler/src/crawler/clean/gazette.py`, `crawler/tests/test_gazette.py`
+
+## The OCR text of the allowance poster drops the personal allowance
+
+- **What happened:** the 2568 allowance poster (`65908`) is the only source of the current allowance amounts in the corpus, and was kept on the strength of its OCR output looking complete (all sections, most amounts present). Reading the image next to the text shows `ส่วนตัว 60,000 บาท` has lost its amount, one `60,000 บาท` serves two rows, a shared `ตามจริงไม่เกิน` brace label is gone and one donation row is duplicated.
+- **How it was caught:** opening the image after the text was exported, before the build was committed; no automatic check can see a missing row.
+- **Fix:** none yet; recorded as open item 11 in `docs/plans/cleaning-open-items.md` with what would settle it. The document is in the corpus as it came out of OCR.
+- **Files:** `crawler/data/text/image/65908_0_lodyon68_update.md`, `crawler/data/image_decisions.csv`

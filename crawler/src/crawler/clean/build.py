@@ -1,6 +1,7 @@
 """Build the clean corpus: one record per document, plus structural units for statute and FAQ documents.
 
 Input : data/pages.jsonl, data/legal_core.csv, data/legal_text.csv, data/text/legal/*.md,
+        data/image_decisions.csv + data/text/image/*.md (images decided keep become documents, source "image"),
         data/legal_scope.csv (hand-labelled PIT scope, optional; see docs/plans/pit-scope.md)
 Output: data/clean/documents.jsonl  (doc_id, source, kind, role, include, title, text, flags, pages, ...)
         `pages` is [[pdf page, start offset in text], ...] for OCR documents, else null (see clean/pages.py)
@@ -13,6 +14,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from crawler import images
 from crawler.clean import classify
 from crawler.clean.gazette import strip_page_headers
 from crawler.clean.pages import take_page_anchors
@@ -82,10 +84,33 @@ def legal_docs() -> list[dict]:
     return docs
 
 
+def image_docs() -> list[dict]:
+    """One document per image decided `keep` in data/image_decisions.csv (see crawler/images.py), from its exported OCR text."""
+    index = {r["image_id"]: r for r in images.load_index()}
+    docs = []
+    for image_id, d in sorted(images.load_decisions().items()):
+        if d["decision"] != "keep":
+            continue
+        path = images.TEXT / f"{image_id}.md"
+        if not path.exists():
+            raise SystemExit(f"{image_id} is decided keep but {path} is missing: run `python -m crawler.images --ocr {image_id}`")
+        text = normalize(path.read_text(encoding="utf-8"))
+        heading = next((ln.lstrip("# ").strip() for ln in text.split("\n") if ln.startswith("#")), "")
+        page_id = index[image_id]["page_id"]
+        docs.append(dict(
+            doc_id=image_id, source="image", url=f"https://www.rd.go.th/{page_id}.html", kind="image", role="content", include=True,
+            title=d["title"] or heading or image_id, breadcrumb=[], last_update=None, tax_year=None,  # tax year: open item 5
+            text_method="ocr", preamble="", n_units=0, n_chars=len(text), flags=[], text=text, n_joins=0, pages=None,
+            parent_page=page_id, image_url=index[image_id]["url"],
+        ))
+    return docs
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     docs, units = page_docs()
     docs += legal_docs()
+    docs += image_docs()
     for name, rows in (("documents", docs), ("units", units)):
         with (OUT / f"{name}.jsonl").open("w", encoding="utf-8") as f:
             f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
