@@ -88,11 +88,13 @@ Status: started 2026-10-17. Tracks details that did not resolve while building `
 
 **Options:** leave it (cleaned downstream), or share one pattern between the two modules and re-run extraction (OCR is cached, so no server is needed).
 
-### 11. OCR misreads in the `65908` poster
+### 11. Verify the hand-corrected `65908` poster text
 
-**State:** `data/text/image/65908_0_lodyon68_update.md` is Typhoon's raw output, compared with the image by eye on 2026-10-18. Known defects: the first allowance line `ส่วนตัว 60,000 บาท` has no amount (the one `60,000 บาท` that follows is attached to `คู่สมรส`, which also has 60,000, so the personal allowance is lost); the brace label `ตามจริงไม่เกิน` over กบข. and the private-teacher fund is dropped; the `สถานพยาบาลของรัฐ` donation line is duplicated. The numbers that are present matched the image where checked.
+**State:** the poster is an infographic with non-standard tables, and Typhoon misread its layout: `ส่วนตัว 60,000 บาท` lost its amount, the CCTV row got an invented `100,000 บาท` (the poster gives only `เพิ่ม 1 เท่าตามที่จ่ายจริง`), `สถานพยาบาลของรัฐ` was duplicated with an invented `ตามที่จ่ายจริง`, and the brace label `ตามจริงไม่เกิน` was dropped. The text in `data/text/image/65908_0_lodyon68_update.md` was transcribed from the image (zoomed crops) by Claude and is recorded as `source = manual`, `verified` empty in `data/image_decisions.csv`. The built document carries the flag `unverified`.
 
-**What would settle it:** fix the text by hand (a correction layer for kept images, or re-OCR at another render size with `typhoon_ocr_file.py --dims`), then compare every amount with the image. Until then a question about the personal allowance should not be answered from this document alone.
+**What would settle it:** a person compares every row and amount with `data/raw/img/65908_0_lodyon68_update.jpg` and sets `verified` to the date (the notebook's checkbox does it). Until then, the document should not be the only support for an allowance amount.
+
+**General rule (2026-10-18):** images that defeat OCR are corrected by hand, not by tuning OCR; `source = manual` files are never overwritten by `images.export_kept`, and `verified` says whether a person has compared text and image.
 
 ### 10. Repo hygiene
 

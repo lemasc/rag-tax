@@ -18,7 +18,7 @@ def _():
     from crawler import images
     from crawler.extract import ocr, ocr_up
 
-    return ROOT, datetime, images, mo, ocr, ocr_up
+    return datetime, images, mo, ocr, ocr_up
 
 
 @app.cell
@@ -57,20 +57,25 @@ def _(corpus, get_decisions, images, index, mo):
             "image_id": _r["image_id"], "page": _r["page_id"], "size": f"{_r['width'] or '?'}x{_r['height'] or '?'}",
             "downloaded": bool(_r["bytes"]), "ocr chars": len(_text) if _text else None, "in page": _page, "elsewhere": _else,
             "decision": get_decisions().get(_r["image_id"], {}).get("decision", ""),
+            "source": get_decisions().get(_r["image_id"], {}).get("source", ""),
+            "verified": get_decisions().get(_r["image_id"], {}).get("verified", ""),
         })
     table = mo.ui.table(_rows, selection="single", page_size=25, label=f"{len(_rows)} images")
     undecided = sum(1 for _r in _rows if not _r["decision"])
-    mo.vstack([mo.md(f"**{undecided}** undecided of {len(_rows)}. Select one to review it."), table])
+    unverified = sum(1 for _r in _rows if _r["decision"] == "keep" and not _r["verified"])
+    mo.vstack([mo.md(f"**{undecided}** undecided of {len(_rows)}; **{unverified}** kept but not verified against the image. Select one to review it."), table])
     return (table,)
 
 
 @app.cell
-def _(corpus, images, index, mo, table):
+def _(corpus, get_decisions, images, index, mo, table):
     mo.stop(not table.value, mo.md("*Select an image above.*"))
     image_id = table.value[0]["image_id"]
     row = next(_r for _r in index if _r["image_id"] == image_id)
     path = images.IMG / row["file"]
     text = images.ocr_text(image_id)
+    _manual = images.TEXT / f"{image_id}.md"
+    _is_manual = get_decisions().get(image_id, {}).get("source") == "manual" and _manual.exists()
     _left = mo.image(path.read_bytes(), width=420) if path.exists() else mo.md("*not downloaded*")
     if text:
         _ov = images.overlap(text, corpus, row["page_id"])
@@ -80,6 +85,7 @@ def _(corpus, images, index, mo, table):
             mo.md(f"overlap with the corpus: **{_ov['corpus']:.0%}** · own page {_ov['page']:.0%} · best matches {_ov['best']}"),
             mo.accordion({f"Lines mostly absent from the corpus ({len(_lines)})": mo.md("\n".join(f"- {_l}" for _l in _lines) or "*none*")}),
             mo.ui.text_area(text, rows=26, full_width=True, disabled=True, label="OCR text"),
+            mo.ui.text_area(_manual.read_text(encoding="utf-8"), rows=26, full_width=True, disabled=True, label="Corrected text (source = manual, in the corpus)") if _is_manual else mo.md(""),
         ])
     else:
         _right = mo.md(f"**{image_id}**: no OCR yet.")
@@ -88,7 +94,7 @@ def _(corpus, images, index, mo, table):
 
 
 @app.cell
-def _(image_id, mo, ocr_up, text):
+def _(mo, ocr_up, text):
     ocr_btn = mo.ui.run_button(label="OCR this image (needs the vLLM server)", disabled=bool(text) or not ocr_up())
     ocr_btn
     return (ocr_btn,)
@@ -108,30 +114,50 @@ def _(get_decisions, image_id, mo):
     choice = mo.ui.radio(["keep", "drop"], value=_cur.get("decision") or None, inline=True, label="Decision")
     title = mo.ui.text(value=_cur.get("title", ""), placeholder="keep only; default: first heading of the text", label="Title", full_width=True)
     note = mo.ui.text(value=_cur.get("note", ""), placeholder="why, in a few words", label="Note", full_width=True)
+    source = mo.ui.radio(["ocr", "manual"], value=_cur.get("source") or "ocr", inline=True, label="Text source")
+    verified = mo.ui.checkbox(value=bool(_cur.get("verified")), label="A person compared this text with the image")
     mo.vstack([
-        mo.md(f"Current: **{_cur['decision']}** ({_cur['decided_at']})" if _cur else "Current: *undecided*"),
+        mo.md(f"Current: **{_cur['decision']}**, source {_cur['source']}, verified {_cur['verified'] or 'no'} ({_cur['decided_at']})" if _cur else "Current: *undecided*"),
         choice, title, note,
+        mo.hstack([source, verified], justify="start", gap=2),
+        mo.md("`manual`: the text is `data/text/image/<id>.md`, edited by hand; saving never overwrites it. Keeping the existing `verified` date needs the box ticked."),
     ])
-    return choice, note, title
+    return choice, note, source, title, verified
 
 
 @app.cell
-def _(choice, mo, text):
-    _blocked = not choice.value or (choice.value == "keep" and not text)
+def _(choice, image_id, images, mo, source, text):
+    _has_text = bool(text) or (source.value == "manual" and (images.TEXT / f"{image_id}.md").exists())
+    _blocked = not choice.value or (choice.value == "keep" and not _has_text)
     save_btn = mo.ui.run_button(
         label=f"Save '{choice.value}'" if choice.value else "Pick a decision to save",
         disabled=_blocked,
     )
-    mo.hstack([save_btn, mo.md("*keep needs OCR text first*" if choice.value == "keep" and not text else "")], justify="start", align="center")
+    mo.hstack([save_btn, mo.md("*keep needs OCR text (or a manual text file) first*" if choice.value == "keep" and not _has_text else "")], justify="start", align="center")
     return (save_btn,)
 
 
 @app.cell
-def _(choice, datetime, image_id, images, mo, note, save_btn, set_decisions, title):
+def _(
+    choice,
+    datetime,
+    get_decisions,
+    image_id,
+    images,
+    mo,
+    note,
+    save_btn,
+    set_decisions,
+    source,
+    title,
+    verified,
+):
     mo.stop(not save_btn.value)
+    _old = get_decisions().get(image_id, {}).get("verified", "")
     _row = {
         "image_id": image_id, "decision": choice.value, "title": title.value.strip() if choice.value == "keep" else "",
-        "note": note.value.strip(), "decided_at": datetime.now().date().isoformat(),
+        "note": note.value.strip(), "decided_at": datetime.now().date().isoformat(), "source": source.value,
+        "verified": (_old or datetime.now().date().isoformat()) if verified.value else "",
     }
 
     def _merge(current):

@@ -51,3 +51,33 @@ def test_65908_poster_is_kept():
     # the page itself is a "Download" hub with 8 characters; the allowance table exists only in the poster
     d = images.load_decisions().get("65908_0_lodyon68_update")
     assert d and d["decision"] == "keep"
+
+
+def test_65908_text_is_the_corrected_one():
+    # the OCR output lost "ส่วนตัว 60,000", invented a 100,000 limit for the CCTV row and duplicated a donation row
+    text = (images.TEXT / "65908_0_lodyon68_update.md").read_text(encoding="utf-8")
+    assert "- ส่วนตัว: 60,000 บาท" in text
+    cctv = next(ln for ln in text.split("\n") if "CCTV" in ln)
+    assert "100,000" not in cctv and "เพิ่ม 1 เท่าตามที่จ่ายจริง" in cctv
+    assert sum("สถานพยาบาลของรัฐ" in ln for ln in text.split("\n")) == 1
+    assert images.load_decisions()["65908_0_lodyon68_update"]["source"] == "manual"
+
+
+def test_export_never_overwrites_a_manual_text(tmp_path, monkeypatch):
+    monkeypatch.setattr(images, "TEXT", tmp_path)
+    monkeypatch.setattr(images, "load_decisions", lambda: {
+        "a": dict(image_id="a", decision="keep", source="manual", verified=""),
+        "b": dict(image_id="b", decision="keep", source="ocr", verified=""),
+        "c": dict(image_id="c", decision="drop", source="ocr", verified="")})
+    monkeypatch.setattr(images, "ocr_text", lambda i: f"ocr {i}")
+    (tmp_path / "a.md").write_text("corrected\n", encoding="utf-8")
+    assert images.export_kept() == ["b"]
+    assert (tmp_path / "a.md").read_text(encoding="utf-8") == "corrected\n"
+    assert (tmp_path / "b.md").read_text(encoding="utf-8") == "ocr b\n" and not (tmp_path / "c.md").exists()
+
+
+def test_decisions_without_the_new_columns_default_to_ocr_and_unverified(tmp_path, monkeypatch):
+    path = tmp_path / "d.csv"
+    path.write_text("image_id,decision,title,note,decided_at\nx,keep,,,2026-10-18\n", encoding="utf-8")
+    monkeypatch.setattr(images, "DECISIONS", path)
+    assert images.load_decisions()["x"]["source"] == "ocr" and images.load_decisions()["x"]["verified"] == ""

@@ -100,8 +100,9 @@ def image_docs() -> list[dict]:
         docs.append(dict(
             doc_id=image_id, source="image", url=f"https://www.rd.go.th/{page_id}.html", kind="image", role="content", include=True,
             title=d["title"] or heading or image_id, breadcrumb=[], last_update=None, tax_year=None,  # tax year: open item 5
-            text_method="ocr", preamble="", n_units=0, n_chars=len(text), flags=[], text=text, n_joins=0, pages=None,
-            parent_page=page_id, image_url=index[image_id]["url"],
+            text_method="manual" if d["source"] == "manual" else "ocr", preamble="", n_units=0, n_chars=len(text),
+            flags=[] if d["verified"] else ["unverified"], text=text, n_joins=0, pages=None,
+            parent_page=page_id, image_url=index[image_id]["url"], verified=d["verified"] or None,
         ))
     return docs
 

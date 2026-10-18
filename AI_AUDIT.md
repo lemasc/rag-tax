@@ -66,9 +66,9 @@ Findings where AI output was wrong or needed correcting. One section per finding
 - **Fix:** `extract.HEADER` leaves volume lines that carry a date; `gazette.strip_page_headers` reduces them to the standalone date (kept once, repeats dropped). 25 of 28 PDF-derived documents now have a date, none lost.
 - **Files:** `crawler/src/crawler/extract.py`, `crawler/src/crawler/clean/gazette.py`, `crawler/tests/test_gazette.py`
 
-## The OCR text of the allowance poster drops the personal allowance
+## The OCR text of the allowance poster lost and invented amounts
 
-- **What happened:** the 2568 allowance poster (`65908`) is the only source of the current allowance amounts in the corpus, and was kept on the strength of its OCR output looking complete (all sections, most amounts present). Reading the image next to the text shows `ส่วนตัว 60,000 บาท` has lost its amount, one `60,000 บาท` serves two rows, a shared `ตามจริงไม่เกิน` brace label is gone and one donation row is duplicated.
-- **How it was caught:** opening the image after the text was exported, before the build was committed; no automatic check can see a missing row.
-- **Fix:** none yet; recorded as open item 11 in `docs/plans/cleaning-open-items.md` with what would settle it. The document is in the corpus as it came out of OCR.
-- **Files:** `crawler/data/text/image/65908_0_lodyon68_update.md`, `crawler/data/image_decisions.csv`
+- **What happened:** the 2568 allowance poster (`65908`) is the only source of the current allowance amounts in the corpus, and was kept on the strength of its OCR output looking complete. Reading the image next to the text shows `ส่วนตัว 60,000 บาท` had lost its amount, one `60,000 บาท` served two rows, a shared `ตามจริงไม่เกิน` brace label was gone and one donation row was duplicated. A closer look at zoomed crops found worse: a `100,000 บาท` limit invented for the CCTV row (the poster states none) and a `ตามที่จ่ายจริง` invented for the public-hospital donation row. My first comparison missed the CCTV one.
+- **How it was caught:** the user's spot check of the image after export; a second, closer read of crops found the invented amounts. No automatic check can see a missing or invented row.
+- **Fix:** the text was transcribed from the image by Claude and stored as `source = manual` (never overwritten by export), flagged `unverified` in the corpus until a person compares it with the poster. The model that transcribed it is not independent of the one that misread it, so the `verified` step is the real control. Regression test: `test_65908_text_is_the_corrected_one`.
+- **Files:** `crawler/data/text/image/65908_0_lodyon68_update.md`, `crawler/data/image_decisions.csv`, `crawler/src/crawler/images.py`, `crawler/tests/test_images.py`

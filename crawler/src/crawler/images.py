@@ -8,8 +8,13 @@ Input : data/pages.jsonl, data/raw/<page id>.html (the `col-main` block), data/c
 Output: data/image_index.csv       (image_id, page_id, url, file, width, height, alt, bytes), rewritten on every run
         data/raw/img/<file>        the downloaded images (not in git)
         data/raw/ocr/<image_id>/   Typhoon OCR output, same cache as the PDFs
-        data/image_decisions.csv   (image_id, decision keep|drop, title, note, decided_at), by hand or notebook
-        data/text/image/<id>.md    OCR text of every image decided `keep` (in git, so clean.build needs no OCR cache)
+        data/image_decisions.csv   (image_id, decision keep|drop, title, note, decided_at, source ocr|manual, verified), by hand or notebook
+        data/text/image/<id>.md    text of every image decided `keep` (in git, so clean.build needs no OCR cache): the OCR text,
+                                   or for `source = manual` a hand-corrected file that export never overwrites
+
+Some images (infographics, tables without ruled lines) defeat OCR in ways no setting fixes. For those the text is corrected
+by hand: write data/text/image/<id>.md, set `source` to `manual`, and set `verified` to the date a person compared the text
+with the image. `verified` empty on a kept image means nobody has done that comparison yet.
 Run   : uv run python -m crawler.images                 list the images and fetch the missing ones
         uv run python -m crawler.images --ocr [ID ...]  OCR these images (default: every image not decided `drop`)
 `image_id` is the file stem: `<page id>_<position among the page's images>_<name in the URL>`.
@@ -36,7 +41,7 @@ TEXT = DATA / "text" / "image"
 INDEX = DATA / "image_index.csv"
 DECISIONS = DATA / "image_decisions.csv"
 INDEX_FIELDS = ["image_id", "page_id", "url", "file", "width", "height", "alt", "bytes"]
-DECISION_FIELDS = ["image_id", "decision", "title", "note", "decided_at"]
+DECISION_FIELDS = ["image_id", "decision", "title", "note", "decided_at", "source", "verified"]
 SKIP = ("counter.php", "hits.php")  # visit counters, not content
 MIN_BYTES = 1000
 
@@ -93,14 +98,14 @@ def save_index(rows: list[dict]) -> None:
 def load_decisions() -> dict[str, dict]:
     if not DECISIONS.exists():
         return {}
-    return {r["image_id"]: r for r in csv.DictReader(DECISIONS.open(encoding="utf-8"))}
+    return {r["image_id"]: {"source": "ocr", "verified": "", **r} for r in csv.DictReader(DECISIONS.open(encoding="utf-8"))}
 
 
 def save_decisions(decisions: dict[str, dict]) -> None:
     with DECISIONS.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=DECISION_FIELDS)
         w.writeheader()
-        w.writerows(sorted(decisions.values(), key=lambda r: r["image_id"]))
+        w.writerows(sorted(({"source": "ocr", "verified": "", **r} for r in decisions.values()), key=lambda r: r["image_id"]))
 
 
 def ocr_path(image_id: str) -> Path:
@@ -117,11 +122,14 @@ def ocr_text(image_id: str) -> str | None:
 
 
 def export_kept() -> list[str]:
-    """Write the OCR text of every image decided `keep` to data/text/image/. Returns the ids written."""
+    """Write the OCR text of every image decided `keep` to data/text/image/. Returns the ids written.
+
+    Images with `source = manual` are skipped: their file is the hand-corrected text and must not be overwritten.
+    """
     TEXT.mkdir(parents=True, exist_ok=True)
     done = []
     for image_id, d in load_decisions().items():
-        text = ocr_text(image_id) if d["decision"] == "keep" else None
+        text = ocr_text(image_id) if d["decision"] == "keep" and d["source"] != "manual" else None
         if text:
             (TEXT / f"{image_id}.md").write_text(text + "\n", encoding="utf-8")
             done.append(image_id)
@@ -201,7 +209,7 @@ def main() -> None:
             else:
                 print(f"{'ok' if ocr(files[image_id]) is not None else 'FAILED':7} {image_id}", flush=True)
     exported = export_kept()
-    kept = [i for i, d in decisions.items() if d["decision"] == "keep"]
+    kept = [i for i, d in decisions.items() if d["decision"] == "keep" and d["source"] != "manual"]
     if set(kept) - set(exported):
         print(f"kept but not OCR'd yet, so no text exported: {sorted(set(kept) - set(exported))} (run with --ocr)", file=sys.stderr)
     print(f"{'image_id':58} {'size':>9} {'decision':8} ocr")
@@ -209,7 +217,9 @@ def main() -> None:
         print(f"{r['image_id'][:58]:58} {r['width'] or '?':>4}x{r['height'] or '?':<4} {decisions.get(r['image_id'], {}).get('decision', '-'):8} "
               f"{'yes' if ocr_path(r['image_id']).exists() else '-'}")
     print(f"{len(rows)} images on {len({r['page_id'] for r in rows})} pages; {sum(1 for r in rows if r['bytes'])} on disk; "
-          f"{sum(1 for d in decisions.values() if d['decision'] == 'keep')} kept, {sum(1 for d in decisions.values() if d['decision'] == 'drop')} dropped")
+          f"{sum(1 for d in decisions.values() if d['decision'] == 'keep')} kept "
+          f"({sum(1 for d in decisions.values() if d['decision'] == 'keep' and not d['verified'])} not verified), "
+          f"{sum(1 for d in decisions.values() if d['decision'] == 'drop')} dropped")
 
 
 if __name__ == "__main__":
