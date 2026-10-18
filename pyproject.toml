@@ -11,7 +11,9 @@ package = false
 [dependency-groups]
 # crawl, extract and clean the corpus (crawler/)
 crawler = [
+    "crawler",
     "jupyter>=1.1.1",
+    "marimo>=0.25.1",
     "lxml>=6.1.3",
     "trafilatura>=2.3.1",
     "urllib3>=2.8.0",
@@ -36,6 +38,7 @@ pythonpath = ["crawler/src", "."]
 # driver supports CUDA 12.6 (nvidia-smi), so use the cu126 wheels rather than PyPI's default build
 [tool.uv.sources]
 torch = { index = "pytorch-cu126" }
+crawler = { path = "crawler", editable = true }
 
 [[tool.uv.index]]
 name = "pytorch-cu126"

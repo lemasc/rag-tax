@@ -531,6 +531,25 @@ wheels = [
 ]
 
 [[package]]
+name = "crawler"
+version = "0.1.0"
+source = { editable = "crawler" }
+dependencies = [
+    { name = "jupyter" },
+    { name = "lxml" },
+    { name = "trafilatura" },
+    { name = "urllib3" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "jupyter", specifier = ">=1.1.1" },
+    { name = "lxml", specifier = ">=6.1.3" },
+    { name = "trafilatura", specifier = ">=2.3.1" },
+    { name = "urllib3", specifier = ">=2.8.0" },
+]
+
+[[package]]
 name = "cuda-bindings"
 version = "12.9.10"
 source = { registry = "https://pypi.org/simple" }
@@ -2891,8 +2910,10 @@ analysis = [
     { name = "umap-learn" },
 ]
 crawler = [
+    { name = "crawler" },
     { name = "jupyter" },
     { name = "lxml" },
+    { name = "marimo" },
     { name = "trafilatura" },
     { name = "urllib3" },
 ]
@@ -2915,8 +2936,10 @@ analysis = [
     { name = "umap-learn", specifier = ">=0.5" },
 ]
 crawler = [
+    { name = "crawler", editable = "crawler" },
     { name = "jupyter", specifier = ">=1.1.1" },
     { name = "lxml", specifier = ">=6.1.3" },
+    { name = "marimo", specifier = ">=0.25.1" },
     { name = "trafilatura", specifier = ">=2.3.1" },
     { name = "urllib3", specifier = ">=2.8.0" },
 ]
