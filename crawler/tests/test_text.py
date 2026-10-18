@@ -55,3 +55,9 @@ def test_cp1252_repair_covers_every_legal_file():
         assert t.count("“") - raw.count("“") == raw.count("\x93"), r["url"]
         n += raw.count("\x93") + raw.count("\x94")
     assert n == 169
+
+
+def test_replacement_characters_become_spaces(pages):
+    # U+FFFD comes from the source HTML: 20 in 61065 (where its duplicate 61081 has a space), 1 in 61117
+    assert normalize("A7 :� 1.") == "A7 : 1."
+    assert not any("�" in normalize(p["text"] or "") for p in pages.values())

@@ -15,6 +15,8 @@ C1_FIX = {
 }
 C1 = re.compile(r"[\x80-\x9f]")
 INVISIBLE = re.compile("[​‌‍﻿]")
+# U+FFFD is already in the source HTML (61065: 20, 61117: 1); in the duplicate page 61081 the same spots hold a space.
+REPLACEMENT = "\ufffd"
 BR = re.compile(r"<br\s*/?>", re.I)  # leaked from the source markup (one FAQ page)
 ENTITIES = {"&amp;": "&", "&nbsp;": " ", "&nsbp;": " "}  # the only ones present; "&nsbp;" is a typo in the source
 
@@ -26,7 +28,7 @@ def _c1(m: re.Match) -> str:
 def normalize(text: str) -> str:
     """Clean one document's text. Idempotent."""
     t = C1.sub(_c1, text)
-    t = BR.sub("\n", INVISIBLE.sub("", t)).replace("\xa0", " ")
+    t = BR.sub("\n", INVISIBLE.sub("", t)).replace("\xa0", " ").replace(REPLACEMENT, " ")
     for ent, ch in ENTITIES.items():
         t = t.replace(ent, ch)
     t = t.translate(THAI_DIGITS)
