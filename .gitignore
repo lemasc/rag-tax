@@ -1,2 +1,6 @@
 .claude/
 .venv/
+# regenerable analysis artefacts
+analysis/out/emb.npy
+notebooks/.ipynb_checkpoints/
+.ipynb_checkpoints/
