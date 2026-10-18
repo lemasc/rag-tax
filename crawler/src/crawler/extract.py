@@ -4,10 +4,12 @@ Input : data/legal_core.csv (decision = keep), data/raw/legal/*
 Output: data/text/legal/<stem>.md, data/legal_text.csv (url, file, method, quality, chars, status, note);
         back-fills empty `year` in data/legal_core.csv from the extracted text.
 
-Order : HTML -> col-main text.  PDF -> pdftotext; if it fails the quality check -> Typhoon OCR (local vLLM).
+Order : HTML -> col-main text.  PDF -> Typhoon OCR (local vLLM). pdftotext is not used: its Thai text loses sara am
+        and misorders tone marks, and OCR was clearly better on all 17 documents compared (docs/plans/cleaning-open-items.md).
+Pages : OCR output carries "<!-- page N -->" anchors; they are kept in the text so clean/ can record page spans.
 OCR   : runs $OCR_HOME/typhoon_ocr_file.py (default ~/san/ocr) in its own venv; start the server with
         ~/san/vllm/serve_typhoon.sh start. If it is down, rows are marked needs-ocr and the run continues.
-Run   : uv run python -m crawler.extract [--force]
+Run   : uv run python -m crawler.extract [--force] [--only STEM ...]
 """
 
 import argparse
@@ -43,10 +45,6 @@ def html_text(path: Path) -> str:
     return "\n".join(line.strip() for line in main.text_content().splitlines())
 
 
-def pdf_text(path: Path) -> str:
-    return subprocess.run(["pdftotext", str(path), "-"], capture_output=True, text=True).stdout
-
-
 def unspace(line: str) -> str:
     """Rejoin letter-spaced Thai ("ซึ่ ง แก้ ไ ข") only on lines where most Thai tokens are fragments."""
     tokens = [t for t in line.split(" ") if re.match(r"[฀-๿]", t)]
@@ -58,7 +56,7 @@ def unspace(line: str) -> str:
 def normalise(text: str) -> str:
     text = unicodedata.normalize("NFC", text)
     text = text.translate(TH_DIGITS).replace("\xa0", " ").replace("\f", "\n")
-    text = re.sub(r"<!-- page \d+(: OCR FAILED)? -->|<figure>.*?</figure>", "", text, flags=re.S)  # OCR page marks, image captions
+    text = re.sub(r"<!-- page \d+: OCR FAILED -->|<figure>.*?</figure>", "", text, flags=re.S)  # failed-page marks, image captions (page anchors stay)
     lines = [unspace(re.sub(r"[ \t]+", " ", l).strip()) for l in text.splitlines()]
     lines = [l for l in lines if not HEADER.match(l)]
     text = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip() + "\n"
@@ -95,11 +93,8 @@ def extract(row: dict, ocr_ok: bool) -> tuple[str, str, str, str]:
     if path.suffix == ".html":
         text = normalise(html_text(path))
         return text, "html", "ok" if quality(text) >= MIN_QUALITY else "failed", ""
-    text = normalise(pdf_text(path))
-    if quality(text) >= MIN_QUALITY:
-        return text, "pdftotext", "ok", ""
-    if not ocr_ok:
-        return "", "", "needs-ocr", "garbled text layer; OCR server not running"
+    if not ocr_ok and not (OCR_RAW / path.stem / f"{path.stem}.md").exists():
+        return "", "", "needs-ocr", "OCR server not running"
     md = ocr(path)
     if md is None:
         return "", "ocr", "failed", "OCR failed on some page (see data/raw/ocr)"
@@ -110,6 +105,7 @@ def extract(row: dict, ocr_ok: bool) -> tuple[str, str, str, str]:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--force", action="store_true", help="re-extract rows that already have cached text")
+    ap.add_argument("--only", nargs="+", metavar="STEM", help="limit --force to these file stems")
     a = ap.parse_args()
 
     core_path = DATA / "legal_core.csv"
@@ -119,7 +115,7 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     ocr_ok = ocr_up()
     if not ocr_ok:
-        print(f"OCR server not reachable at {OCR_URL}: garbled PDFs will be marked needs-ocr (start: ~/san/vllm/serve_typhoon.sh start)")
+        print(f"OCR server not reachable at {OCR_URL}: PDFs without cached OCR will be marked needs-ocr (start: ~/san/vllm/serve_typhoon.sh start)")
 
     for r in core:
         if r["decision"] != "keep":
@@ -128,7 +124,7 @@ def main() -> None:
         stem = Path(r["file"]).stem if r["file"] else norm(r["url"]).rsplit("/", 1)[-1]
         out = OUT / f"{stem}.md"
         prev = index.get(r["url"])
-        if prev and prev["status"] == "ok" and out.exists() and not a.force:
+        if prev and prev["status"] == "ok" and out.exists() and not (a.force and (not a.only or stem in a.only)):
             text = out.read_text(encoding="utf-8")
         else:
             text, method, status, note = extract(r, ocr_ok)

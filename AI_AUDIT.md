@@ -51,3 +51,10 @@ Findings where AI output was wrong or needed correcting. One section per finding
 - **How it was caught:** by you, reading the OCR output next to the PDFs (page headers mostly gone, but the date repeated). A scan for header-like lines in all PDF-derived text then found the `เลม่` shape.
 - **Fix:** `crawler.clean.gazette.strip_page_headers` handles both shapes, keeps the first standalone date as `gazette_date` (it is the publication date, needed for "effective the day after publication") and drops identical repeats. Applied in the clean stage, so no OCR re-run. `extract.py` still has the narrower regex.
 - **Files:** `crawler/src/crawler/clean/gazette.py`, `crawler/tests/test_gazette.py`, `crawler/src/crawler/clean/build.py`
+
+## pdftotext had lost sara am in half the PDFs, and the dictionary metric did not show it
+
+- **What happened:** the cleaning pass judged pdftotext by out-of-dictionary tokens per 1k (median 37.4 against OCR 6.5) and repaired tone-mark order with rules. In 8 of the 17 pdftotext documents the text layer has no `ำ` at all (`กาหนด`, `คานวณ`, `สาหรับ`). The broken pieces are valid words, so `e9c223c3262b` and `0735ac19649b` scored OOV 0.0 and looked clean.
+- **How it was caught:** re-OCR'ing 5 documents and reading the word-level diff, then counting `ำ` and likely lost-`ำ` words in all 17.
+- **Fix:** PDFs use Typhoon OCR by default (`extract.py`); the 17 documents were re-extracted from OCR. Word diffs for review are in `crawler/data/raw/ocr_compare/` (not in git). The rule-based repairs in `rejoin.py` stay but no document uses them now.
+- **Files:** `crawler/src/crawler/extract.py`, `crawler/data/text/legal/`, `crawler/data/legal_text.csv`

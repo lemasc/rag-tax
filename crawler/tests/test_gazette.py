@@ -46,9 +46,10 @@ def test_content_that_mentions_the_gazette_is_kept():
     assert strip_page_headers(text) == (text, None, [])
 
 
-def test_pdftotext_tone_mark_misorder_mr350():
-    # mr350.pdf: "เลม่ 136 ตอนที่ 79 ก" at the top of both pages; the earlier stripper only knew "เล่ม"
-    out, date, removed = cleaned("mr350.pdf")
+def test_pdftotext_tone_mark_misorder():
+    # shape seen at the top of both pages of mr350.pdf when it was read with pdftotext (now OCR); the stripper once only knew "เล่ม"
+    text = "เลม่ 136 ตอนที่ 79 ก\n25 มิถุนายน 2562\nข้อ 1 ก\nเลม่ 136 ตอนที่ 79 ก\n25 มิถุนายน 2562\nข้อ 2 ข"
+    out, date, removed = strip_page_headers(text)
     assert [l for l in removed if l.startswith("เลม่")] == ["เลม่ 136 ตอนที่ 79 ก"] * 2
     assert "เลม่" not in out and date == "25 มิถุนายน 2562" and out.count(date) == 1
 
