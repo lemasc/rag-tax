@@ -68,14 +68,12 @@ def _(corpus, get_decisions, images, index, mo):
 
 
 @app.cell
-def _(corpus, get_decisions, images, index, mo, table):
+def _(corpus, images, index, mo, table):
     mo.stop(not table.value, mo.md("*Select an image above.*"))
     image_id = table.value[0]["image_id"]
     row = next(_r for _r in index if _r["image_id"] == image_id)
     path = images.IMG / row["file"]
     text = images.ocr_text(image_id)
-    _manual = images.TEXT / f"{image_id}.md"
-    _is_manual = get_decisions().get(image_id, {}).get("source") == "manual" and _manual.exists()
     _left = mo.image(path.read_bytes(), width=420) if path.exists() else mo.md("*not downloaded*")
     if text:
         _ov = images.overlap(text, corpus, row["page_id"])
@@ -84,8 +82,7 @@ def _(corpus, get_decisions, images, index, mo, table):
             mo.md(f"**{image_id}** on page [{row['page_id']}](https://www.rd.go.th/{row['page_id']}.html), alt: `{row['alt'] or '-'}`"),
             mo.md(f"overlap with the corpus: **{_ov['corpus']:.0%}** · own page {_ov['page']:.0%} · best matches {_ov['best']}"),
             mo.accordion({f"Lines mostly absent from the corpus ({len(_lines)})": mo.md("\n".join(f"- {_l}" for _l in _lines) or "*none*")}),
-            mo.ui.text_area(text, rows=26, full_width=True, disabled=True, label="OCR text"),
-            mo.ui.text_area(_manual.read_text(encoding="utf-8"), rows=26, full_width=True, disabled=True, label="Corrected text (source = manual, in the corpus)") if _is_manual else mo.md(""),
+            mo.ui.text_area(text, rows=26, full_width=True, disabled=True, label="OCR text (read-only)"),
         ])
     else:
         _right = mo.md(f"**{image_id}**: no OCR yet.")
@@ -105,6 +102,46 @@ def _(image_id, images, mo, ocr, ocr_btn, row):
     mo.stop(not ocr_btn.value)
     _ok = ocr(images.IMG / row["file"]) is not None
     mo.md(f"OCR of `{image_id}` {'done: reselect the row to see it' if _ok else 'FAILED'}")
+    return
+
+
+@app.cell
+def _(image_id, images, mo, text):
+    # Starts from the corrected file when the image is already `manual`, otherwise from the OCR text. It reads the
+    # decisions file rather than the state so that saving does not rebuild the editor and wipe its confirmation.
+    _path = images.TEXT / f"{image_id}.md"
+    _manual = images.load_decisions().get(image_id, {}).get("source") == "manual" and _path.exists()
+    editor = mo.ui.text_area(_path.read_text(encoding="utf-8") if _manual else (text or ""), rows=28, full_width=True,
+                             label="Text for the corpus" + (" (hand-corrected file)" if _manual else " (starts from the OCR text)"))
+    edit_btn = mo.ui.run_button(label="Save edited text (source = manual, verified cleared)")
+    mo.vstack([
+        mo.md("### Edit the text\nSaving writes `data/text/image/<id>.md`, marks the image `manual` and clears `verified`: "
+              "changed text has to be compared with the image again. Then set the decision below."),
+        editor, edit_btn,
+    ])
+    return edit_btn, editor
+
+
+@app.cell
+def _(datetime, edit_btn, editor, image_id, images, mo, set_decisions):
+    mo.stop(not edit_btn.value)
+    mo.stop(not editor.value.strip(), mo.md("*Empty text is not saved.*"))
+    images.TEXT.mkdir(parents=True, exist_ok=True)
+    (images.TEXT / f"{image_id}.md").write_text(editor.value.strip() + "\n", encoding="utf-8")
+    _old = images.load_decisions().get(image_id, {})
+    _edited = {
+        "title": "", "note": "", **_old, "image_id": image_id, "decision": _old.get("decision") or "keep",
+        "source": "manual", "verified": "", "decided_at": datetime.now().date().isoformat(),
+    }
+
+    def _merge_edit(current):
+        merged = {**current, image_id: _edited}
+        images.save_decisions(merged)
+        return merged
+
+    set_decisions(_merge_edit)
+    mo.md(f"Saved the text of `{image_id}` ({len(editor.value.strip())} characters), decision **{_edited['decision']}**, source **manual**, not verified. "
+          "Re-run `python -m crawler.clean.build` to rebuild the corpus.")
     return
 
 
@@ -141,7 +178,6 @@ def _(choice, image_id, images, mo, source, text):
 def _(
     choice,
     datetime,
-    get_decisions,
     image_id,
     images,
     mo,
@@ -153,7 +189,7 @@ def _(
     verified,
 ):
     mo.stop(not save_btn.value)
-    _old = get_decisions().get(image_id, {}).get("verified", "")
+    _old = images.load_decisions().get(image_id, {}).get("verified", "")
     _row = {
         "image_id": image_id, "decision": choice.value, "title": title.value.strip() if choice.value == "keep" else "",
         "note": note.value.strip(), "decided_at": datetime.now().date().isoformat(), "source": source.value,
