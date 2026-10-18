@@ -72,3 +72,10 @@ Findings where AI output was wrong or needed correcting. One section per finding
 - **How it was caught:** the user's spot check of the image after export; a second, closer read of crops found the invented amounts. No automatic check can see a missing or invented row.
 - **Fix:** the text was transcribed from the image by Claude and stored as `source = manual` (never overwritten by export), flagged `unverified` in the corpus until a person compares it with the poster. The model that transcribed it is not independent of the one that misread it, so the `verified` step is the real control. Regression test: `test_65908_text_is_the_corrected_one`.
 - **Files:** `crawler/data/text/image/65908_0_lodyon68_update.md`, `crawler/data/image_decisions.csv`, `crawler/src/crawler/images.py`, `crawler/tests/test_images.py`
+
+## A stale notebook server truncated image_decisions.csv
+
+- **What happened:** after the `source`/`verified` columns were added, a `marimo edit --watch` server that had started earlier reloaded the notebook file but kept the old `crawler.images` module (5 columns) in memory. Saving an edit from the UI built a 7-key row, and the old `save_decisions` opened the file for writing, wrote the 5-column header and raised mid-way. The file ended with the header and 15 of 17 rows (`65908` and `66379_0` gone, `source` and `verified` gone). The bug on my side: `save_decisions` truncated the real file before it knew the write would succeed.
+- **How it was caught:** the user saw missing columns in the CSV and suspected the server. `git diff` showed the two lost rows.
+- **Fix:** the CSV was restored from git (no value in the surviving rows had changed). `save_decisions` now writes a temporary file and replaces the original, so a failure leaves the old file; regression test `test_a_failed_save_leaves_the_decisions_file_intact`. A running notebook still needs a restart after `crawler/` code changes: `--watch` does not reload imported modules.
+- **Files:** `crawler/src/crawler/images.py`, `crawler/tests/test_images.py`

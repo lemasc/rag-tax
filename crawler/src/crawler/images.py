@@ -102,10 +102,18 @@ def load_decisions() -> dict[str, dict]:
 
 
 def save_decisions(decisions: dict[str, dict]) -> None:
-    with DECISIONS.open("w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=DECISION_FIELDS)
-        w.writeheader()
-        w.writerows(sorted(({"source": "ocr", "verified": "", **r} for r in decisions.values()), key=lambda r: r["image_id"]))
+    """Rewrite the decisions file. Written to a temporary file first, so a failure leaves the old file as it was
+    (a long-running notebook can hold an older version of this module, and a half-written file lost two rows once)."""
+    rows = sorted(({"source": "ocr", "verified": "", **r} for r in decisions.values()), key=lambda r: r["image_id"])
+    tmp = DECISIONS.with_suffix(".csv.tmp")
+    try:
+        with tmp.open("w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=DECISION_FIELDS)
+            w.writeheader()
+            w.writerows(rows)
+        tmp.replace(DECISIONS)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def ocr_path(image_id: str) -> Path:

@@ -81,3 +81,15 @@ def test_decisions_without_the_new_columns_default_to_ocr_and_unverified(tmp_pat
     path.write_text("image_id,decision,title,note,decided_at\nx,keep,,,2026-10-18\n", encoding="utf-8")
     monkeypatch.setattr(images, "DECISIONS", path)
     assert images.load_decisions()["x"]["source"] == "ocr" and images.load_decisions()["x"]["verified"] == ""
+
+
+def test_a_failed_save_leaves_the_decisions_file_intact(tmp_path, monkeypatch):
+    # a stale notebook server once truncated the file: DictWriter raised on a row with extra keys after "w" had emptied it
+    path = tmp_path / "d.csv"
+    monkeypatch.setattr(images, "DECISIONS", path)
+    images.save_decisions({"a": dict(image_id="a", decision="drop", title="", note="", decided_at="2026-10-18")})
+    before = path.read_text(encoding="utf-8")
+    with pytest.raises(ValueError):
+        images.save_decisions({"a": dict(image_id="a", decision="drop", title="", note="", decided_at="x"),
+                               "b": dict(image_id="b", decision="keep", title="", note="", decided_at="x", extra="boom")})
+    assert path.read_text(encoding="utf-8") == before and not list(tmp_path.glob("*.tmp"))
