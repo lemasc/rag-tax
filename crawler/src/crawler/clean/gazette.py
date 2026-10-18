@@ -1,8 +1,11 @@
 """Royal Gazette page furniture left in the text of PDF-derived legal documents (pdftotext and OCR).
 
 Every Gazette page starts with a header: volume/part (เล่ม … ตอน …), page (หน้า N ราชกิจจานุเบกษา) and the publication date.
-Extraction removes most of it, but misses two shapes: pdftotext writes the tone mark out of order ("เลม่ 136 ตอนที่ 79 ก"),
+Extraction removes most of it, but misses three shapes (the third is below): pdftotext writes the tone mark out of order ("เลม่ 136 ตอนที่ 79 ก"),
 and Typhoon OCR keeps "หน้า 3 ราชกิจจานุเบกษา" on one line. The publication date comes back at every page start.
+
+Typhoon OCR often writes the volume and the date on one line ("เล่ม 133 ตอนพิเศษ 174 ง ราชกิจจานุเบกษา 8 สิงหาคม 2559"):
+the volume text is dropped and the date is treated as a standalone date line.
 
 The first standalone date is kept (it is the publication date, and "effective the day after publication" needs it) and
 returned as `gazette_date`; identical repeats are page headers and are dropped.
@@ -13,22 +16,29 @@ import re
 NUMBERING = re.compile(r"^เล(?:่ม|ม่)\s*\d+\s*ตอน(?:ที่|พิเศษ)\s*\d+\s*[ก-ฮ]?$")
 PAGE = re.compile(r"^หน้า\s*\d+(?:\s*ราชกิจจานุเบกษา)?$")
 MONTHS = "มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม"
-DATE = re.compile(rf"^(\d{{1,2}} (?:{MONTHS}) \d{{4}})$")
+DATE_TEXT = rf"\d{{1,2}} (?:{MONTHS}) \d{{4}}"
+DATE = re.compile(rf"^({DATE_TEXT})$")
+VOLUME_DATE = re.compile(rf"^เล(?:่ม|ม่)\s*\d+\s*ตอน(?:ที่|พิเศษ)\s*\d+\s*[ก-ฮ]?\s*ราชกิจจานุเบกษา\s+({DATE_TEXT})$")  # OCR: volume and date on one line
 
 
 def strip_page_headers(text: str) -> tuple[str, str | None, list[str]]:
     """Return (text without page headers, publication date or None, the lines removed)."""
     kept, removed, gazette_date = [], [], None
     for line in text.split("\n"):
-        s = line.strip()
+        s = original = line.strip()
+        combined = VOLUME_DATE.match(s)
+        if combined:
+            s = line = combined.group(1)  # the volume text goes, the date is handled below as a standalone line
         if NUMBERING.match(s) or PAGE.match(s):
             removed.append(s)
         elif m := DATE.match(s):
             if gazette_date is None:
                 gazette_date = m.group(1)
                 kept.append(line)
+                if combined:
+                    removed.append(original)  # the header line that was reduced to its date
             elif m.group(1) == gazette_date:
-                removed.append(s)
+                removed.append(original)
             else:
                 kept.append(line)  # a different standalone date: not ours to judge
         else:

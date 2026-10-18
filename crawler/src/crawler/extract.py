@@ -32,8 +32,9 @@ OCR_RAW = RAW.parent / "ocr"  # Typhoon's per-page output, kept out of git
 OCR_HOME = Path(os.environ.get("OCR_HOME", Path.home() / "san" / "ocr"))
 OCR_URL = "http://127.0.0.1:8101/v1"
 
-# Royal Gazette running header, one item per line: "หน้า 33", "เล่ม 134 ตอนที่ 12 ก", "ราชกิจจานุเบกษา"
-HEADER = re.compile(r"^\s*(หน้า\s*\d+|เล่ม\s*\d+\s*ตอน.*|ราชกิจจานุเบกษา)\s*$")
+# Royal Gazette running header, one item per line: "หน้า 33", "เล่ม 134 ตอนที่ 12 ก", "ราชกิจจานุเบกษา".
+# A volume line that also carries the publication date ("… ราชกิจจานุเบกษา 8 สิงหาคม 2559", OCR) is left for clean/gazette.py.
+HEADER = re.compile(r"^\s*(หน้า\s*\d+|เล่ม\s*\d+\s*ตอน(?:(?!ราชกิจจานุเบกษา\s*\d).)*|ราชกิจจานุเบกษา)\s*$")
 THAI_GAP = re.compile(r"(?<=[฀-๿]) (?=[฀-๿])")
 
 

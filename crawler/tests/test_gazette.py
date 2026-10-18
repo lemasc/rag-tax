@@ -75,3 +75,19 @@ def test_no_header_line_survives_in_any_pdf_derived_document():
         out, _, _ = strip_page_headers(normalize((DATA / "text" / "legal" / r["file"]).read_text(encoding="utf-8")))
         leftovers += [(r["url"], l) for l in out.split("\n") if NUMBERING.match(l.strip()) or PAGE.match(l.strip())]
     assert not leftovers, leftovers
+
+
+def test_ocr_volume_and_date_on_one_line():
+    # 8af6e969ad2b (OCR): "เล่ม 133 ตอนพิเศษ 174 ง ราชกิจจานุเบกษา 8 สิงหาคม 2559" is one line; extract once deleted it with the date
+    head = "เล่ม 133 ตอนพิเศษ 174 ง ราชกิจจานุเบกษา 8 สิงหาคม 2559"
+    out, date, removed = strip_page_headers(f"{head}\nข้อ 1 ก\n{head}\nข้อ 2 ข")
+    assert date == "8 สิงหาคม 2559"
+    assert out == "8 สิงหาคม 2559\nข้อ 1 ก\nข้อ 2 ข"
+    assert removed == [head, head]
+
+
+def test_extract_leaves_the_dated_volume_line_for_clean():
+    from crawler.extract import normalise
+
+    t = normalise("หน้า 19\nเล่ม 133 ตอนพิเศษ 174 ง ราชกิจจานุเบกษา 8 สิงหาคม 2559\nเล่ม 134 ตอนที่ 12 ก\nข้อ 1")
+    assert "ราชกิจจานุเบกษา 8 สิงหาคม 2559" in t and "หน้า 19" not in t and "ตอนที่ 12" not in t

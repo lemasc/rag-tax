@@ -70,9 +70,9 @@ Status: started 2026-10-17. Tracks details that did not resolve while building `
 
 ### 7. Publication date on PDF-derived documents
 
-**State:** `gazette_date` found for 21 of 28. Missing for `mr397`, `dn161A`, `dn162A`, `dg457A`, `dg438A`, `dg451A`, `dg459A`: no standalone date line in their text. For the OCR ones the date is probably in a header the OCR did not read, which is unconfirmed.
+**State:** `gazette_date` found for 25 of 28 PDF-derived documents. Missing: `dn161A`, `dn162A` (กรมสรรพากร orders ป. 161/2566 and 162/2566, probably not Gazette-published, so no date is expected) and `dg457A`. Typhoon often writes the volume line and the date as one line (`เล่ม 133 … ราชกิจจานุเบกษา 8 สิงหาคม 2559`); `extract.normalise` used to delete those lines whole, which is why the date looked "not read by the OCR". Fixed in the commit that closes the page-anchor work; `dg457A` is unchecked.
 
-**What would settle it:** open those PDFs in the viewer (side by side) and see whether a date is printed and where.
+**What would settle it:** open `dg457A` and the two orders in the viewer and see whether a publication date is printed.
 
 ### 8. Quote style in amending instruments
 
@@ -82,9 +82,9 @@ Status: started 2026-10-17. Tracks details that did not resolve while building `
 
 ### 9. `extract.py` header regex is narrower than `clean/gazette.py`
 
-**State:** `extract.py` strips only `เล่ม`, a bare `หน้า N` and a bare `ราชกิจจานุเบกษา`. The clean stage covers the out-of-order tone mark and OCR's one-line `หน้า N ราชกิจจานุเบกษา`. Harmless today because the text cache is cleaned downstream, but the cache itself still holds those lines.
+**State:** `extract.py` strips only `เล่ม`, a bare `หน้า N` and a bare `ราชกิจจานุเบกษา`, and now leaves a volume line that carries the date for the clean stage. The clean stage covers the out-of-order tone mark, OCR's one-line `หน้า N ราชกิจจานุเบกษา` and the dated volume line. Harmless today because the text cache is cleaned downstream, but the cache itself still holds those lines.
 
-**Options:** leave it (cleaned downstream), or share one pattern between the two modules and re-run extraction for the `pdftotext` rows (no OCR needed).
+**Options:** leave it (cleaned downstream), or share one pattern between the two modules and re-run extraction (OCR is cached, so no server is needed).
 
 ### 10. Repo hygiene
 
@@ -100,6 +100,9 @@ Recorded in `crawler/data/unit_decisions.csv` (one row per dropped document or u
 
 ## Resolved
 
+- **pdftotext against OCR for the 17 pdftotext documents:** PDFs now use OCR by default, `b3087dd`. See the update under item 1.
+- **Page anchors (`<!-- page N -->`) stripped by `extract.normalise`:** kept in `data/text/legal/` and turned into `pages` offsets by `clean/pages.py` (`documents.jsonl`: `[[pdf page, start offset], ...]`, null for HTML). The number is the PDF page index, not the printed Gazette page. A word split across a page boundary is not rejoined. Open: nothing reads `pages` yet (the legal splitters, item 2, will). Typhoon's markdown (`**bold**`, `<table>`) is left in the text, as it already was for the first 11 OCR documents.
+- **Gazette date lost on OCR documents with a one-line volume+date header:** `gazette.py` and `extract.HEADER`; 4 more documents have a `gazette_date` (25 of 28).
 - **U+FFFD in source HTML** (21 characters: 20 in `61065`, 1 in `61117`; already in the raw HTML, missed by the character-class profile because Python counts U+FFFD as printable): mapped to a space in `normalize`, `61ce262`.
 - **60061 dropped a paragraph** (bare `<strong>` outside any `<p>` dropped by trafilatura): fixed in `parse._wrap_bare_inline`, `f0223db`.
 - **Gazette page headers left in PDF-derived text** (`เลม่ …`, OCR `หน้า N ราชกิจจานุเบกษา`, repeated page dates): fixed in `clean/gazette.py`, `28628f5`.

@@ -58,3 +58,10 @@ Findings where AI output was wrong or needed correcting. One section per finding
 - **How it was caught:** re-OCR'ing 5 documents and reading the word-level diff, then counting `ำ` and likely lost-`ำ` words in all 17.
 - **Fix:** PDFs use Typhoon OCR by default (`extract.py`); the 17 documents were re-extracted from OCR. Word diffs for review are in `crawler/data/raw/ocr_compare/` (not in git). The rule-based repairs in `rejoin.py` stay but no document uses them now.
 - **Files:** `crawler/src/crawler/extract.py`, `crawler/data/text/legal/`, `crawler/data/legal_text.csv`
+
+## Switching to OCR lost the Gazette publication date on 6 documents
+
+- **What happened:** after the PDFs moved to OCR and the clean stage was rebuilt, `gazette_date` went from set to null on 6 documents. Typhoon writes the volume and the date as one line (`เล่ม 133 ตอนพิเศษ 174 ง ราชกิจจานุเบกษา 8 สิงหาคม 2559`). `extract.normalise` deleted that whole line with its `เล่ม … ตอน.*` rule, and `gazette.py` only knew standalone date lines. The same loss had silently hit 4 of the 11 documents that were already OCR.
+- **How it was caught:** diffing every field of `documents.jsonl` against the previous commit after the rebuild, instead of only checking the text.
+- **Fix:** `extract.HEADER` leaves volume lines that carry a date; `gazette.strip_page_headers` reduces them to the standalone date (kept once, repeats dropped). 25 of 28 PDF-derived documents now have a date, none lost.
+- **Files:** `crawler/src/crawler/extract.py`, `crawler/src/crawler/clean/gazette.py`, `crawler/tests/test_gazette.py`
