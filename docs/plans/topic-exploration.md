@@ -37,7 +37,7 @@ Status: first pass 2026-10-18. Code in `analysis/` (`chunks.py`, `topics.py`, `s
 - Sample evaluation questions per topic, not per chunk, or the three big Clear Cut pages will dominate.
 - Chunk size: windows of about 300 tokens look reasonable for the legal text; FAQ items (median 94) need no splitting but the long tail (up to 1,787) and long statute sections (p90 1,404) do. The token-aware chunker should keep Q+A together and split sections at sub-paragraphs.
 - Decide a relevance rule for non-PIT instruments before building the index; otherwise retrieval will return corporate-tax text for PIT questions.
-- Drop `61065` as a duplicate of `61081`, and review the 18 shared units between `62149` and `62777`.
+- Drop `61065` as a duplicate of `61081`, and review the 18 shared units between `62149` and `62777`. Done: see Decisions in `cleaning-open-items.md` (the unit-level comparison found 20 shared units, not 18).
 
 ## Not done
 

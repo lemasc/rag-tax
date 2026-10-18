@@ -1,0 +1,22 @@
+id,level,decision,duplicate_of,match,note,decided_at
+61065,doc,drop,61081,identical,all 74 units identical after whitespace and U+FFFD; 61065 carries 20 U+FFFD from the source HTML,2026-10-18
+62149#025,unit,drop,62777#001,identical,,2026-10-18
+62149#026,unit,drop,62777#004,wording,,2026-10-18
+62149#027,unit,drop,62777#006,identical,,2026-10-18
+62149#029,unit,drop,62777#023,identical,,2026-10-18
+62149#030,unit,drop,62777#033,identical,,2026-10-18
+62149#031,unit,drop,62777#038,substantive,older revision; 62777 kept,2026-10-18
+62149#032,unit,drop,62777#046,substantive,older revision; 62777 kept,2026-10-18
+62149#033,unit,drop,62777#057,substantive,older revision; 62777 kept,2026-10-18
+62149#034,unit,drop,62777#061,identical,,2026-10-18
+62149#035,unit,drop,62777#064,identical,,2026-10-18
+62149#036,unit,drop,62777#065,substantive,older revision; 62777 kept,2026-10-18
+62149#037,unit,drop,62777#066,substantive,older revision; 62777 kept,2026-10-18
+62149#039,unit,drop,62777#073,substantive,older revision; 62777 kept,2026-10-18
+62149#040,unit,drop,62777#087,wording,,2026-10-18
+62149#041,unit,drop,62777#084,identical,,2026-10-18
+62149#043,unit,drop,62777#090,identical,,2026-10-18
+62149#044,unit,drop,62777#092,substantive,older revision; 62777 kept,2026-10-18
+62149#045,unit,drop,62777#094,wording,,2026-10-18
+62149#047,unit,drop,62777#015,identical,,2026-10-18
+62149#048,unit,drop,62777#112,identical,,2026-10-18

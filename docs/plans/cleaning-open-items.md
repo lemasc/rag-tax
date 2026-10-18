@@ -85,6 +85,19 @@ Status: started 2026-10-17. Tracks details that did not resolve while building `
 - `notebooks/.ipynb_checkpoints/` is untracked and not ignored.
 - `crawler/.playwright/` is untracked and predates this work.
 
+### 11. U+FFFD in source HTML
+
+**State:** not handled. 21 replacement characters in the cleaned text: 20 in `61065`, 1 in `61117`. They are already in the raw HTML (rd.go.th served them), mostly where a space belongs. The character-class profile missed them because Python counts U+FFFD as printable.
+
+**Fix:** map U+FFFD to a space in `normalize`, with a test over the corpus. `61065` is dropped anyway (see Decisions), so only `61117` is affected downstream.
+
+## Decisions
+
+Recorded in `crawler/data/unit_decisions.csv` (one row per dropped document or unit, with what it duplicates). Nothing reads the file yet; the chunker should apply it. Unit ids are positional (`62149#025`), so the file must be re-checked if the FAQ splitter changes.
+
+- **`61065` dropped as a duplicate of `61081`** (2026-10-18). All 74 units are identical once whitespace and U+FFFD are ignored; the only other difference is quote marks around the title. `61065`'s hub (`60578`) suggests tax year 2561, but FAQ years are not treated as reliable.
+- **62149 / 62777: keep 62777 for the 20 shared units** (2026-10-18). The overlap is one block of 62149 (`#025`–`#048`, section การหักค่าลดหย่อน) matched to units scattered across 62777's per-deduction sections. Compared after stripping `Q n :` / `A n :` labels (62777 restarts numbering per sub-topic, so labels always differ) and whitespace: 10 identical, 3 differ in wording only, 7 differ in substance. In the substantive ones 62149 is the older revision even though its title says ปี 2563: own health insurance 15,000 (2560) vs 25,000 (2563), RMF 15% with minimum-purchase rules vs 30% without. The other 55 units of 62149 and 93 of 62777 are unique and kept. The 7 substantive pairs are candidates for evaluation questions on outdated limits.
+
 ## Resolved
 
 - **60061 dropped a paragraph** (bare `<strong>` outside any `<p>` dropped by trafilatura): fixed in `parse._wrap_bare_inline`, `f0223db`.
