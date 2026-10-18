@@ -19,8 +19,10 @@ def _():
     from crawler.clean.gazette import strip_page_headers
     from crawler.clean.text import normalize
 
+    ROOT = Path(__file__).resolve().parents[1]
     return (
         Path,
+        ROOT,
         csv,
         hashlib,
         html,
@@ -33,9 +35,9 @@ def _():
 
 
 @app.cell
-def _(Path, json, mo):
-    docs = [json.loads(l) for l in Path("data/clean/documents.jsonl").read_text(encoding="utf-8").splitlines()]
-    units = [json.loads(l) for l in Path("data/clean/units.jsonl").read_text(encoding="utf-8").splitlines()]
+def _(ROOT, json, mo):
+    docs = [json.loads(l) for l in (ROOT / "data/clean/documents.jsonl").read_text(encoding="utf-8").splitlines()]
+    units = [json.loads(l) for l in (ROOT / "data/clean/units.jsonl").read_text(encoding="utf-8").splitlines()]
     by_id = {_d["doc_id"]: _d for _d in docs}
     units_of = {}
     for _u in units:
@@ -52,22 +54,22 @@ def _(Path, json, mo):
 
 
 @app.cell
-def _(Path, csv, hashlib, html, json, mo, re):
+def _(Path, ROOT, csv, hashlib, html, json, mo, re):
     from crawler.clean.audit import page_source_parts
     from crawler.legal import doc_text
 
-    RAW = Path("data/raw")
+    RAW = ROOT / "data/raw"
     page_raw = {
         _p["url"].rsplit("/", 1)[-1].removesuffix(".html"): _p["text"] or ""
-        for _p in map(json.loads, Path("data/pages.jsonl").open(encoding="utf-8"))
+        for _p in map(json.loads, (ROOT / "data/pages.jsonl").open(encoding="utf-8"))
     }
-    legal_file = {_r["url"]: _r["file"] for _r in csv.DictReader(Path("data/legal_text.csv").open(encoding="utf-8"))}
+    legal_file = {_r["url"]: _r["file"] for _r in csv.DictReader((ROOT / "data/legal_text.csv").open(encoding="utf-8"))}
 
     def pre_clean_text(d):
         """The text as it was before `normalize` (trafilatura output / cached legal text)."""
         if d["source"] == "page":
             return page_raw[d["doc_id"]]
-        return Path("data/text/legal", legal_file[d["url"]]).read_text(encoding="utf-8")
+        return Path(ROOT, "data/text/legal", legal_file[d["url"]]).read_text(encoding="utf-8")
 
     def pdf_path(d):
         if d["source"] == "legal" and d["url"].endswith(".pdf"):

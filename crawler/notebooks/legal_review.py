@@ -15,16 +15,18 @@ def _():
 
     import marimo as mo
 
-    return Counter, Path, csv, hashlib, mo, re, subprocess
+    ROOT = Path(__file__).resolve().parents[1]
+
+    return ROOT, Counter, Path, csv, hashlib, mo, re, subprocess
 
 
 @app.cell
-def _(Path, csv, mo):
-    RAW = Path("data/raw/legal")
-    catalog = list(csv.DictReader(open("data/legal_catalog.csv", encoding="utf-8")))
-    scan = {r["url"]: r for r in csv.DictReader(open("data/legal_scan.csv", encoding="utf-8"))}
-    core = {r["url"]: r for r in csv.DictReader(open("data/legal_core.csv", encoding="utf-8"))}
-    extracted = {r["url"]: r for r in csv.DictReader(open("data/legal_text.csv", encoding="utf-8"))}
+def _(ROOT, Path, csv, mo):
+    RAW = ROOT / "data/raw/legal"
+    catalog = list(csv.DictReader(open(ROOT / "data/legal_catalog.csv", encoding="utf-8")))
+    scan = {r["url"]: r for r in csv.DictReader(open(ROOT / "data/legal_scan.csv", encoding="utf-8"))}
+    core = {r["url"]: r for r in csv.DictReader(open(ROOT / "data/legal_core.csv", encoding="utf-8"))}
+    extracted = {r["url"]: r for r in csv.DictReader(open(ROOT / "data/legal_text.csv", encoding="utf-8"))}
 
     def group(r):
         """Proposed action, from tier + reason + full-text scan (see docs/plans/legal-source-crawl.md)."""
@@ -166,7 +168,7 @@ def _(mo):
 
 
 @app.cell
-def _(Path, RAW, catalog, extracted, hashlib, mo, re, subprocess, table):
+def _(ROOT, Path, RAW, catalog, extracted, hashlib, mo, re, subprocess, table):
     _TH = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
 
     def extract(url: str) -> str:
@@ -188,7 +190,7 @@ def _(Path, RAW, catalog, extracted, hashlib, mo, re, subprocess, table):
         _r = next(r for r in catalog if r["url"] == _url)
         _x = extracted.get(_url, {})
         _cached = _x.get("status") == "ok"
-        _text = Path("data/text/legal", _x["file"]).read_text(encoding="utf-8") if _cached else extract(_url)
+        _text = Path(ROOT, "data/text/legal", _x["file"]).read_text(encoding="utf-8") if _cached else extract(_url)
         _pdf = f"[open original]({_url})" + (f" · text from `data/text/legal/{_x['file']}`" if _cached else "")
         _body = (
             mo.ui.text_area(_text, rows=28, full_width=True, disabled=True)

@@ -14,12 +14,14 @@ def _():
 
     import marimo as mo
 
-    return Counter, Path, datetime, json, mo, re
+    ROOT = Path(__file__).resolve().parents[1]
+
+    return ROOT, Counter, Path, datetime, json, mo, re
 
 
 @app.cell
-def _(Path, json, mo):
-    pages = [json.loads(l) for l in Path("data/pages.jsonl").read_text(encoding="utf-8").splitlines()]
+def _(ROOT, Path, json, mo):
+    pages = [json.loads(l) for l in (ROOT / "data/pages.jsonl").read_text(encoding="utf-8").splitlines()]
     for _p in pages:
         _p["id"] = _p["url"].rsplit("/", 1)[-1].removesuffix(".html")
         _p["n_chars"] = len(_p["text"] or "")
@@ -221,10 +223,10 @@ def _(mo):
 
 
 @app.cell
-def _(Path, mo):
+def _(ROOT, Path, mo):
     import csv as _csv
 
-    PAGE_DECISIONS_PATH = Path("data/page_decisions.csv")
+    PAGE_DECISIONS_PATH = ROOT / "data/page_decisions.csv"
     PAGE_DECISION_FIELDS = ["id", "decision", "note", "decided_at"]
 
     def load_page_decisions():
@@ -373,7 +375,7 @@ def _(mo):
 
 
 @app.cell
-def _(Path, pages):
+def _(ROOT, Path, pages):
     from urllib.parse import urlparse as _urlparse
 
     def link_type(url):
@@ -389,7 +391,7 @@ def _(Path, pages):
     def norm(url):
         return url.replace("http://", "https://").replace("://rd.go.th", "://www.rd.go.th").replace("://cmsinteradmin.rd.go.th", "://www.rd.go.th").rstrip("/")
 
-    _seen_urls = {norm(_l.strip()) for _l in Path("links.txt").read_text().splitlines() if _l.strip()}
+    _seen_urls = {norm(_l.strip()) for _l in (ROOT / "links.txt").read_text().splitlines() if _l.strip()}
     _seen_urls |= {norm(_p["url"]) for _p in pages}
 
     _cand = {}
@@ -429,10 +431,10 @@ def _(Path, pages):
 
 
 @app.cell
-def _(Path, mo):
+def _(ROOT, Path, mo):
     import csv
 
-    DECISIONS_PATH = Path("data/link_decisions.csv")
+    DECISIONS_PATH = ROOT / "data/link_decisions.csv"
     DECISION_FIELDS = ["url", "decision", "tier", "title", "type", "domain", "n_pages", "decided_at"]
 
     def load_decisions():
