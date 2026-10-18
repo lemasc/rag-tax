@@ -11,13 +11,14 @@ def _():
     import re
     import subprocess
     from collections import Counter
+    from datetime import datetime
     from pathlib import Path
 
     import marimo as mo
 
     ROOT = Path(__file__).resolve().parents[1]
 
-    return ROOT, Counter, Path, csv, hashlib, mo, re, subprocess
+    return ROOT, Counter, Path, csv, datetime, hashlib, mo, re, subprocess
 
 
 @app.cell
@@ -133,7 +134,7 @@ def _(catalog, mo):
     f_core = mo.ui.checkbox(value=True, label="Core set only")
     f_kind = mo.ui.multiselect(sorted({r["kind"] for r in catalog}), label="Kind")
     f_group = mo.ui.multiselect(sorted({r["group"] for r in catalog}), label="Proposed")
-    f_text = mo.ui.text(label="Title contains", placeholder="e.g. ลดหย่อน, บริจาค, มาตรา 47")
+    f_text = mo.ui.text(label="Title or URL contains", placeholder="e.g. ลดหย่อน, มาตรา 47, mr401A")
     mo.hstack([f_core, f_kind, f_group, f_text], justify="start", gap=2, wrap=True)
     return f_core, f_group, f_kind, f_text
 
@@ -145,7 +146,7 @@ def _(catalog, f_core, f_group, f_kind, f_text, mo):
         if (not f_core.value or r["core"])
         and (not f_kind.value or r["kind"] in f_kind.value)
         and (not f_group.value or r["group"] in f_group.value)
-        and (not f_text.value or f_text.value in r["title"])
+        and (not f_text.value or f_text.value in r["title"] or f_text.value in r["url"])
     ]
     table = mo.ui.table(
         [
@@ -208,6 +209,107 @@ def _(ROOT, Path, RAW, catalog, extracted, hashlib, mo, re, subprocess, table):
                   f"PIT hits {_r['pit']} / corp hits {_r['corp']} · {_r['chars']} chars · {_pdf}"),
             _body,
         ]))
+    return
+
+
+@app.cell
+def _(ROOT, csv, mo, re):
+    SCOPE_PATH = ROOT / "data/legal_scope.csv"
+    SCOPE_FIELDS = ["url", "scope", "pit_clauses", "note", "decided_at"]
+    SCOPES = ["pit", "mixed", "non_pit"]
+
+    def load_scope():
+        if not SCOPE_PATH.exists():
+            return {}
+        with SCOPE_PATH.open(encoding="utf-8", newline="") as _f:
+            return {_r["url"]: _r for _r in csv.DictReader(_f)}
+
+    get_scope, set_scope = mo.state(load_scope())
+    # the rule lives in docs/plans/pit-scope.md so the notebook and the plan cannot drift apart
+    _doc = (ROOT.parent / "docs/plans/pit-scope.md").read_text(encoding="utf-8")
+    scope_rule = re.search(r"## Rule\n(.*?)\n## ", _doc, re.S).group(1)
+    scope_rule = re.sub(r"<!--.*?-->", "", scope_rule, flags=re.S).strip()
+    return SCOPES, SCOPE_FIELDS, SCOPE_PATH, get_scope, scope_rule, set_scope
+
+
+@app.cell
+def _(SCOPES, get_scope, mo, scope_rule, table):
+    # Acts on the row selected in section 2, so reading (section 3) and labelling happen on the same document.
+    mo.stop(not table.value or table.value[0]["core"] != "keep", mo.md("*Select a kept core-set document in section 2 to label its PIT scope.*"))
+    scope_url = table.value[0]["url"]
+    _cur = get_scope().get(scope_url, {})
+    scope_choice = mo.ui.radio(SCOPES, value=_cur.get("scope") or None, inline=True, label="Scope")
+    scope_clauses = mo.ui.text(value=_cur.get("pit_clauses", ""), placeholder="mixed only: e.g. ข้อ 1–3, 5", label="PIT clauses")
+    scope_note = mo.ui.text(value=_cur.get("note", ""), placeholder="why, in a few words", label="Note", full_width=True)
+    mo.vstack([
+        mo.md("### PIT scope of this document"),
+        mo.accordion({"Scope rule (docs/plans/pit-scope.md)": mo.md(scope_rule)}),
+        mo.md(f"Current: **{_cur['scope']}** ({_cur['decided_at']})" if _cur else "Current: *not labelled*"),
+        mo.hstack([scope_choice, scope_clauses], justify="start", gap=2, align="end"),
+        scope_note,
+    ])
+    return scope_choice, scope_clauses, scope_note, scope_url
+
+
+@app.cell
+def _(mo, scope_choice):
+    scope_btn = mo.ui.run_button(label=f"Save scope '{scope_choice.value}'" if scope_choice.value else "Pick a scope to save", disabled=not scope_choice.value)
+    scope_btn
+    return (scope_btn,)
+
+
+@app.cell
+def _(
+    SCOPE_FIELDS,
+    SCOPE_PATH,
+    csv,
+    datetime,
+    mo,
+    scope_btn,
+    scope_choice,
+    scope_clauses,
+    scope_note,
+    scope_url,
+    set_scope,
+):
+    mo.stop(not scope_btn.value)
+    _row = {
+        "url": scope_url, "scope": scope_choice.value, "pit_clauses": scope_clauses.value.strip() if scope_choice.value == "mixed" else "",
+        "note": scope_note.value.strip(), "decided_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+    def _merge_scope(current):
+        merged = {**current, scope_url: _row}
+        with SCOPE_PATH.open("w", encoding="utf-8", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=SCOPE_FIELDS)
+            w.writeheader()
+            w.writerows(sorted(merged.values(), key=lambda r: r["url"]))
+        return merged
+
+    set_scope(_merge_scope)
+    mo.md(f"Saved **{_row['scope']}** for {scope_url} to `{SCOPE_PATH.name}`")
+    return
+
+
+@app.cell
+def _(Counter, catalog, get_scope, mo):
+    # Progress and the review queue. Lives apart from section 2's table so saving does not reset its selection.
+    _decided = get_scope()
+    _core = [r for r in catalog if r["core"] == "keep"]
+    _todo = sorted((r for r in _core if r["url"] not in _decided), key=lambda r: -((r["corp"] or 0) - (r["pit"] or 0)))
+    _n = Counter(d["scope"] for d in _decided.values())
+    mo.vstack([
+        mo.md(f"**Scope labels:** {len(_decided)} of {len(_core)} kept core documents · "
+              + " · ".join(f"{k} {_n[k]}" for k in ("pit", "mixed", "non_pit"))
+              + ". Unlabelled documents stay in the corpus. Queue below: most corporate-leaning first (`corp` − `pit` keyword hits); "
+              "paste a URL into section 2's search box to read and label it."),
+        mo.accordion({
+            f"Unlabelled ({len(_todo)})": mo.ui.table(
+                [{"corp": r["corp"], "pit": r["pit"], "kind": r["kind"], "title": r["title"][:100], "url": r["url"]} for r in _todo],
+                selection=None, page_size=15),
+            f"Labelled ({len(_decided)})": mo.ui.table(list(_decided.values()), selection=None, page_size=15),
+        }),
+    ])
     return
 
 

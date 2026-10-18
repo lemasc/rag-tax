@@ -1,6 +1,7 @@
 """Build the clean corpus: one record per document, plus structural units for statute and FAQ documents.
 
-Input : data/pages.jsonl, data/legal_core.csv, data/legal_text.csv, data/text/legal/*.md
+Input : data/pages.jsonl, data/legal_core.csv, data/legal_text.csv, data/text/legal/*.md,
+        data/legal_scope.csv (hand-labelled PIT scope, optional; see docs/plans/pit-scope.md)
 Output: data/clean/documents.jsonl  (doc_id, source, kind, role, include, title, text, flags, ...)
         data/clean/units.jsonl      (unit_id, doc_id, type, label, text, section, title, flags, notes)
 Run   : uv run python -m crawler.clean.build
@@ -51,6 +52,8 @@ def page_docs() -> tuple[list[dict], list[dict]]:
 
 def legal_docs() -> list[dict]:
     core = {r["url"]: r for r in csv.DictReader((DATA / "legal_core.csv").open(encoding="utf-8")) if r["decision"] == "keep"}
+    scope_path = DATA / "legal_scope.csv"
+    scope = {r["url"]: r for r in csv.DictReader(scope_path.open(encoding="utf-8"))} if scope_path.exists() else {}
     docs = []
     for r in csv.DictReader((DATA / "legal_text.csv").open(encoding="utf-8")):
         c = core.get(r["url"])
@@ -64,8 +67,10 @@ def legal_docs() -> list[dict]:
         fixes = []
         if r["method"] == "pdftotext":
             text, fixes = fix_tone_marks(text)
+        s = scope.get(r["url"], {})
         docs.append(dict(
-            doc_id=Path(r["file"]).stem, source="legal", url=r["url"], kind=c["kind"].split(":")[0], role="content", include=True,
+            doc_id=Path(r["file"]).stem, source="legal", url=r["url"], kind=c["kind"].split(":")[0], role="content",
+            include=s.get("scope") != "non_pit", scope=s.get("scope") or None, pit_clauses=s.get("pit_clauses") or None,
             title=c["title"], breadcrumb=[], last_update=None, tax_year=None, year=c["year"] or None,
             text_method=r["method"], preamble="", n_units=0, n_chars=len(text), flags=[], text=text,
             gazette_date=gazette_date, n_header_lines_removed=len(removed), n_joins=len(joins), n_tone_fixes=len(fixes),
@@ -82,6 +87,7 @@ def main() -> None:
             f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
     print(f"{len(docs)} documents ({sum(d['include'] for d in docs)} included), {len(units)} units -> {OUT}")
     print("by source/kind:", dict(Counter((d["source"], d["kind"]) for d in docs)))
+    print("legal scope:", dict(Counter(d["scope"] for d in docs if d["source"] == "legal")))
     print("unit flags:", dict(Counter(f for u in units for f in u["flags"])))
 
 
