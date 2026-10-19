@@ -40,7 +40,7 @@ Re-run after the corpus changed under the first pass: PDFs moved to Typhoon OCR 
 - **Agreement:** NMF vs KMeans ARI 0.33, NMI 0.52 (was 0.30 / 0.50). HDBSCAN 38 clusters, 149 noise (was 44 / 169).
 - **Balance:** unchanged in shape: 10 documents hold 44% of chunks (`61549` 121, `62777` 113, `61081` 74, `62149` 55, `f41021ec0cf8` 53).
 - **Text defects:** the split-word junk terms (`ใ ช้`, `ผ่า`) are gone from all topic labels. `ถอด อ๋า` is still a top term of dense cluster 7 (51 of 52 chunks กฎกระทรวง): it is the `mr401A` OCR hallucination, which nothing repairs yet (cleaning item 1).
-- **Scope drift is still there**, now clearer: NMF topic 11 (VAT, tobacco), dense clusters 2 (company training deductions), 6 (tobacco wholesale), 14 (agents, shipping), 17 (securities-firm withholding). Film actors (cluster 3, 32 chunks) is PIT. No legal document has a scope label yet (`legal_scope.csv` is empty).
+- **Scope drift is still there**, now clearer: NMF topic 11 (VAT, tobacco), dense clusters 2 (company training deductions), 6 (tobacco wholesale), 14 (agents, shipping), 17 (securities-firm withholding). Film actors (cluster 3, 32 chunks) is PIT. No legal document had a scope label when this pass ran. They exist now (`pit-scope.md`), but `analysis/out` has not been rebuilt, so these clusters still include the 8 `non_pit` documents.
 - The topics both methods agree on are the same as in the first pass.
 
 ## What this implies
