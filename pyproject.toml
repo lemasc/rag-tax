@@ -30,6 +30,13 @@ analysis = [
     "matplotlib>=3.11.2",
     "marimo>=0.25.1",
 ]
+# retrieval baseline: chunking, dense and sparse indexes (rag/)
+rag = [
+    "pythainlp>=5.1",
+    "scipy>=1.14",
+    "torch",
+    "sentence-transformers>=3.0",
+]
 dev = ["pytest>=9.1.1"]
 
 [tool.pytest.ini_options]

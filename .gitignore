@@ -2,5 +2,8 @@
 .venv/
 # regenerable analysis artefacts
 analysis/out/emb.npy
+rag/out/dense/
+rag/out/sparse_tokens.jsonl
 notebooks/.ipynb_checkpoints/
 .ipynb_checkpoints/
+__pycache__/
