@@ -1,6 +1,6 @@
 # Topic exploration (sparse and dense)
 
-Status: first pass 2026-10-18. Code in `analysis/` (`chunks.py`, `topics.py`, `show.py`); run from the repo root with `uv run python analysis/<script>.py`. Outputs in `analysis/out/` (`emb.npy` is gitignored).
+Status: first pass 2026-10-18; re-run 2026-10-19 on the rebuilt corpus (see **Second pass** below; the first-pass numbers are kept for comparison). Code in `analysis/` (`chunks.py`, `topics.py`, `show.py`); run from the repo root with `uv run python analysis/<script>.py`. Outputs in `analysis/out/` (`emb.npy` is gitignored).
 
 ## Setup
 
@@ -31,6 +31,17 @@ Status: first pass 2026-10-18. Code in `analysis/` (`chunks.py`, `topics.py`, `s
 **Text-quality defects that leak into topics.**
 - OCR/PDF text still has letter-spaced and split Thai ("ใ ช้", "รหัส ผ่า น", "ถอด อ๋า" as a top term). They produce junk tokens for the sparse model and noise for dense. Related to open item 1.
 - Many legal chunks are only a list of provinces, numbered clauses or tables; they cluster by form, not meaning.
+
+## Second pass (2026-10-19)
+
+Re-run after the corpus changed under the first pass: PDFs moved to Typhoon OCR (97 of 108 OCR chunks had different text), split words were rejoined, the `65908` poster was added, and the duplicate decisions in `crawler/data/unit_decisions.csv` are now applied by `crawler.clean.build` (`include = false` and `duplicate_of` on `61065` and the 20 `62149` units). `chunks.py` skips excluded units.
+
+- **Chunks:** 1,286 (was 1,375); only 11 flagged `dup_of` (was 100), all between legal instruments (an instrument and its amendment). 1,275 modelled, the same count as before by coincidence. FAQ items 531 (median 98 tokens); statute and window lengths unchanged; 13 over 512 tokens, 21 under 30. The poster is 3 windows (383, 375, 100 tokens).
+- **Agreement:** NMF vs KMeans ARI 0.33, NMI 0.52 (was 0.30 / 0.50). HDBSCAN 38 clusters, 149 noise (was 44 / 169).
+- **Balance:** unchanged in shape: 10 documents hold 44% of chunks (`61549` 121, `62777` 113, `61081` 74, `62149` 55, `f41021ec0cf8` 53).
+- **Text defects:** the split-word junk terms (`ใ ช้`, `ผ่า`) are gone from all topic labels. `ถอด อ๋า` is still a top term of dense cluster 7 (51 of 52 chunks กฎกระทรวง): it is the `mr401A` OCR hallucination, which nothing repairs yet (cleaning item 1).
+- **Scope drift is still there**, now clearer: NMF topic 11 (VAT, tobacco), dense clusters 2 (company training deductions), 6 (tobacco wholesale), 14 (agents, shipping), 17 (securities-firm withholding). Film actors (cluster 3, 32 chunks) is PIT. No legal document has a scope label yet (`legal_scope.csv` is empty).
+- The topics both methods agree on are the same as in the first pass.
 
 ## What this implies
 

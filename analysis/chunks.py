@@ -2,7 +2,8 @@
 
 Existing structural units (FAQ items, statute sections) are used as they are. Documents without units are cut
 into paragraph windows of at most WINDOW_CHARS characters, only so that every part of the corpus has pieces of a
-comparable size. Near-duplicates are flagged in `dup_of` and left in the table; consumers decide whether to drop.
+comparable size. Documents and units with include=false (hub pages, hand-recorded duplicate drops) are left out.
+Remaining near-duplicates are flagged in `dup_of` and left in the table; consumers decide whether to drop.
 
 Input : crawler/data/clean/{documents,units}.jsonl
 Output: analysis/out/chunks.jsonl
@@ -71,6 +72,8 @@ def build() -> list[dict]:
         base = dict(doc_id=d["doc_id"], source=d["source"], kind=d["kind"], title=d["title"], tax_year=d["tax_year"] or d.get("year"))
         if d["doc_id"] in units_of:
             for u in units_of[d["doc_id"]]:
+                if not u["include"]:
+                    continue
                 rows.append(base | dict(chunk_id=u["unit_id"], origin=u["type"], section=u["section"], text=u["text"]))
         else:
             for i, w in enumerate(windows(d["text"]), 1):
