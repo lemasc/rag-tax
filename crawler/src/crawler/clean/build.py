@@ -2,10 +2,11 @@
 
 Input : data/pages.jsonl, data/legal_core.csv, data/legal_text.csv, data/text/legal/*.md,
         data/image_decisions.csv + data/text/image/*.md (images decided keep become documents, source "image"),
-        data/legal_scope.csv (hand-labelled PIT scope, optional; see docs/plans/pit-scope.md)
+        data/legal_scope.csv (hand-labelled PIT scope, optional; see docs/plans/pit-scope.md),
+        data/unit_decisions.csv (hand-recorded duplicate drops; a dropped document or unit gets include=false and duplicate_of)
 Output: data/clean/documents.jsonl  (doc_id, source, kind, role, include, title, text, flags, pages, ...)
         `pages` is [[pdf page, start offset in text], ...] for OCR documents, else null (see clean/pages.py)
-        data/clean/units.jsonl      (unit_id, doc_id, type, label, text, section, title, flags, notes)
+        data/clean/units.jsonl      (unit_id, doc_id, type, label, text, section, title, flags, notes, include, duplicate_of)
 Run   : uv run python -m crawler.clean.build
 """
 
@@ -17,7 +18,6 @@ from pathlib import Path
 from crawler import images
 from crawler.clean import classify
 from crawler.clean.gazette import strip_page_headers
-from crawler.clean.pages import take_page_anchors
 from crawler.clean.pages import take_page_anchors
 from crawler.clean.rejoin import fix_tone_marks, rejoin
 from crawler.clean.text import normalize
@@ -107,15 +107,34 @@ def image_docs() -> list[dict]:
     return docs
 
 
+def apply_decisions(docs: list[dict], units: list[dict], decisions: list[dict]) -> None:
+    """Mark dropped documents and units include=false with what they duplicate. Every decision must name an existing
+    record: unit ids are positional (`62149#025`), so a splitter change that moves them fails here instead of silently
+    dropping the wrong unit."""
+    for u in units:
+        u["include"], u["duplicate_of"] = True, None
+    by_level = {"doc": {d["doc_id"]: d for d in docs}, "unit": {u["unit_id"]: u for u in units}}
+    for r in decisions:
+        if r["decision"] != "drop":
+            continue
+        rec = by_level[r["level"]].get(r["id"])
+        if rec is None:
+            raise SystemExit(f"unit_decisions.csv: no {r['level']} {r['id']!r} in the built corpus")
+        rec["include"], rec["duplicate_of"] = False, r["duplicate_of"] or None
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     docs, units = page_docs()
     docs += legal_docs()
     docs += image_docs()
+    decisions_path = DATA / "unit_decisions.csv"
+    if decisions_path.exists():
+        apply_decisions(docs, units, list(csv.DictReader(decisions_path.open(encoding="utf-8"))))
     for name, rows in (("documents", docs), ("units", units)):
         with (OUT / f"{name}.jsonl").open("w", encoding="utf-8") as f:
             f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
-    print(f"{len(docs)} documents ({sum(d['include'] for d in docs)} included), {len(units)} units -> {OUT}")
+    print(f"{len(docs)} documents ({sum(d['include'] for d in docs)} included), {len(units)} units ({sum(u['include'] for u in units)} included) -> {OUT}")
     print("by source/kind:", dict(Counter((d["source"], d["kind"]) for d in docs)))
     print("legal scope:", dict(Counter(d["scope"] for d in docs if d["source"] == "legal")))
     print("unit flags:", dict(Counter(f for u in units for f in u["flags"])))
