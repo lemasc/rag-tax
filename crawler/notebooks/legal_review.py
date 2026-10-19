@@ -17,12 +17,11 @@ def _():
     import marimo as mo
 
     ROOT = Path(__file__).resolve().parents[1]
-
-    return ROOT, Counter, Path, csv, datetime, hashlib, mo, re, subprocess
+    return Counter, Path, ROOT, csv, datetime, hashlib, mo, re, subprocess
 
 
 @app.cell
-def _(ROOT, Path, csv, mo):
+def _(ROOT, csv, mo):
     RAW = ROOT / "data/raw/legal"
     catalog = list(csv.DictReader(open(ROOT / "data/legal_catalog.csv", encoding="utf-8")))
     scan = {r["url"]: r for r in csv.DictReader(open(ROOT / "data/legal_scan.csv", encoding="utf-8"))}
@@ -140,7 +139,10 @@ def _(catalog, mo):
 
 
 @app.cell
-def _(catalog, f_core, f_group, f_kind, f_text, mo):
+def _(catalog, f_core, f_group, f_kind, f_text, load_scope, mo):
+    # Scope is read from the file, not from get_scope(): depending on the state would rebuild the table on every save and drop the selection.
+    # So the column is as of the last filter change; section 3 shows the live value.
+    _scope = load_scope()
     shown = [
         r for r in catalog
         if (not f_core.value or r["core"])
@@ -150,7 +152,7 @@ def _(catalog, f_core, f_group, f_kind, f_text, mo):
     ]
     table = mo.ui.table(
         [
-            {"core": r["core"], "source": r["source"], "raw text": r["text"], "year": r["year"], "kind": r["kind"], "tier": r["tier"], "was": r["tier_v1"], "reason": r["reason"], "group": r["group"], "pit": r["pit"], "corp": r["corp"],
+            {"scope": _scope.get(r["url"], {}).get("scope") or "-", "core": r["core"], "source": r["source"], "raw text": r["text"], "year": r["year"], "kind": r["kind"], "tier": r["tier"], "was": r["tier_v1"], "reason": r["reason"], "group": r["group"], "pit": r["pit"], "corp": r["corp"],
              "chars": r["chars"], "title": r["title"][:140], "url": r["url"]}
             for r in shown
         ],
@@ -169,7 +171,7 @@ def _(mo):
 
 
 @app.cell
-def _(ROOT, Path, RAW, catalog, extracted, hashlib, mo, re, subprocess, table):
+def _(Path, RAW, ROOT, catalog, extracted, hashlib, mo, re, subprocess, table):
     _TH = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
 
     def extract(url: str) -> str:
@@ -229,7 +231,15 @@ def _(ROOT, csv, mo, re):
     _doc = (ROOT.parent / "docs/plans/pit-scope.md").read_text(encoding="utf-8")
     scope_rule = re.search(r"## Rule\n(.*?)\n## ", _doc, re.S).group(1)
     scope_rule = re.sub(r"<!--.*?-->", "", scope_rule, flags=re.S).strip()
-    return SCOPES, SCOPE_FIELDS, SCOPE_PATH, get_scope, scope_rule, set_scope
+    return (
+        SCOPES,
+        SCOPE_FIELDS,
+        SCOPE_PATH,
+        get_scope,
+        load_scope,
+        scope_rule,
+        set_scope,
+    )
 
 
 @app.cell
