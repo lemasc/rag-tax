@@ -9,13 +9,15 @@ reuses the label; answer labels belong to one run's answer.
 
 Assignment: everyone labels the shared set first (rag/eval/shared_questions.txt, drawn once); it is where agreement
 between reviewers is measured. The rest is split by first come: a reviewer's queue holds the shared questions they
-have not done, then the questions nobody has labelled for this run. Multi-turn sets travel together. Two people
-picking the same question at the same moment only adds overlap.
+have not done, then the questions nobody has labelled for this run. Multi-turn sets travel together. Each reviewer
+sees the unclaimed questions in their own order (a hash of their name and the question), so people working at the
+same time rarely start on the same one; when they do, it only adds overlap.
 
 Rubric and tags: docs/plans/review-rubric.md (keep the two in step).
 """
 
 import csv
+import hashlib
 import random
 import re
 import time
@@ -142,9 +144,9 @@ class Item:
 
 
 def queue(reviewer: str, run_id: str, question_ids: list[str], shared: list[str]) -> tuple[list[Item], list[Item]]:
-    """(to do, all) for a reviewer in a run, over the run's questions in file order. To do: the shared questions
-    they have not finished, then questions nobody has finished; a multi-turn set another reviewer has started is
-    left to them."""
+    """(to do, all) for a reviewer in a run; `all` is in file order. To do: the shared questions they have not
+    finished (file order), then questions nobody has finished in the reviewer's own order; a multi-turn set another
+    reviewer has started is left to them, and a set's turns stay together and in order."""
     done = {r: {q for (rid, q), lab in answer_labels(r).items() if rid == run_id and is_complete(lab)} for r in reviewers()}
     set_of = {q.id: q.set for q in load()}
     items = [Item(q, q in shared, sorted(r for r, d in done.items() if q in d)) for q in question_ids]
@@ -153,8 +155,15 @@ def queue(reviewer: str, run_id: str, question_ids: list[str], shared: list[str]
     my_sets = {set_of[q] for q in mine if set_of.get(q)}
     todo = [i for i in items if i.question_id not in mine and (
         i.shared or (not i.done_by and (set_of[i.question_id] is None or set_of[i.question_id] not in others_sets - my_sets)))]
-    todo.sort(key=lambda i: not i.shared)  # shared first, file order otherwise (the sort is stable)
-    return todo, items
+    position = {q: n for n, q in enumerate(question_ids)}
+
+    def order(i: Item) -> tuple:
+        if i.shared:
+            return (0, "", position[i.question_id])
+        unit = set_of[i.question_id] or i.question_id  # a multi-turn set sorts as one unit
+        return (1, hashlib.sha256(f"{reviewer}:{run_id}:{unit}".encode()).hexdigest(), position[i.question_id])
+
+    return sorted(todo, key=order), items
 
 
 def agreement(run_id: str, question_ids: list[str]) -> dict[str, tuple[int, float]]:

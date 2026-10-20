@@ -6,7 +6,7 @@ Status: draft 2026-10-21, to be agreed before the shared set is labelled. The va
 
 - Open the notebook, pick your name (or type a new one), pick the run.
 - **Shared set first:** 10 dev questions (`rag/eval/shared_questions.txt`) that everyone labels, without discussing them. Agreement between reviewers is measured only there. If agreement is poor, fix the wording here and re-label the shared set before going on.
-- Then the queue offers questions nobody has labelled yet. A multi-turn set stays with whoever starts it.
+- Then the queue offers questions nobody has labelled yet, in an order of your own (so people working at the same time rarely pick the same question). A multi-turn set stays with whoever starts it.
 - Each person's labels go to `rag/eval/labels/<name>/`; commit them like code.
 
 ## Running and sharing the notebook
