@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from rag.evaluate import (agree, check_rubric, check_verdicts, conversation, faithfulness, make_ask, relevance,
+from rag.evaluate import (agree, check_rubric, check_verdicts, conversation, faithfulness, human_gap, make_ask, relevance,
                           summarise)
 
 
@@ -108,3 +108,12 @@ def test_agree_reports_exact_within_one_and_bias():
     assert a["bias"] == pytest.approx((0 - 1 + 2) / 3)
     assert agree([("yes", "yes"), ("no", "yes")], numeric=False) == dict(n=2, exact=0.5)
     assert agree([], numeric=True) == dict(n=0)
+
+
+def test_human_gap_ignores_incomplete_labels():
+    rub = dict(grounded=2, correct=1, useful=2)
+    full = lambda g, c, u: dict(grounded=str(g), correct=str(c), useful=str(u), behaviour="na")  # noqa: E731
+    assert human_gap(rub, [full(2, 1, 2)]) == 0
+    assert human_gap(rub, [full(2, 1, 2), full(0, 1, 2)]) == pytest.approx(2 / 6)
+    assert human_gap(rub, [dict(grounded="2", correct="", useful="2", behaviour="na")]) is None
+    assert human_gap(rub, []) is None

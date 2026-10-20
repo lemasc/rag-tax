@@ -331,6 +331,13 @@ def agree(pairs: list[tuple[str, str]], numeric: bool) -> dict:
     return out
 
 
+def human_gap(rub: dict, labs: list[dict]) -> float | None:
+    """Mean absolute distance between the judge's grounded/correct/useful and the complete human labels for one
+    answer; None when no reviewer has finished it. Large values are where the judge and the humans disagree."""
+    gaps = [abs(rub[f] - int(lab[f])) for lab in labs if is_complete(lab) for f in ("grounded", "correct", "useful")]
+    return sum(gaps) / len(gaps) if gaps else None
+
+
 def compare(path: Path, scores: list[dict]) -> dict[str, dict]:
     """Per reviewer and pooled: judge-human agreement on the rubric items and on chunk relevance. Pairs only
     where the reviewer's answer label is complete; chunks are matched by (question, chunk id)."""
