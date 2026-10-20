@@ -7,3 +7,5 @@ rag/out/sparse_tokens.jsonl
 notebooks/.ipynb_checkpoints/
 .ipynb_checkpoints/
 __pycache__/
+# API keys and local endpoints (see .env.example)
+.env
