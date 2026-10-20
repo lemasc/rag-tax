@@ -118,3 +118,13 @@ Report per category, not only the mean: the corpus gaps (freelance, crypto) and 
 - `ragas` library or a direct implementation.
 - Who labels the retrieval sample and grades the judge-validation sample, and how many questions each.
 - Whether to write reference answers for a small subset anyway. That would add BERTScore as a third metric, but it costs a person's time.
+
+## Dev run 1 (2026-10-20)
+
+`rag/out/runs/20261020-dev-gpt-mini-hybrid-k5-v1`: gpt-6-luna (reasoning low), hybrid, k = 5, prompt v1. 40 calls, 103K tokens in, 7K out, median 9.6 s per answer. Built with `answer.py` and `demo.py` (step 3); not yet read in full by a person.
+
+- Every answer cites at least one source; no citation points outside the 5 sources.
+- Behavioural questions behave: the ask-back questions ask for the missing facts, both misconceptions are corrected, the lottery question says the sources do not cover it.
+- **One document fills all 5 slots.** Q0091 and Q0301 (foreign income) get five windows of ป.120/2545 (film crews); Q0327 gets five windows of ป.96/2543. ป.161/2566 and ป.162/2566 (foreign income, มาตรา 41 วรรคสอง), which answer Q0091, are in the corpus and not retrieved. A per-document cap on hits is a candidate fix and ablation.
+- **Calculation questions get old worked examples** (2542–2543 withholding orders) instead of the current rate table, and the answer declines to compute. Tax-year handling again.
+- The demo question on parents' allowance mixed the half-year ภ.ง.ด.94 amount (15,000) into the answer as if it were an older year's figure.

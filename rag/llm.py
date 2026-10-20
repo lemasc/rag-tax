@@ -16,6 +16,7 @@ import json
 import os
 import re
 import sys
+import threading
 import time
 import tomllib
 from dataclasses import dataclass, field
@@ -88,6 +89,7 @@ def cache_key(p: Profile, messages: list[dict], params: dict, json_out: bool) ->
 
 _clients: dict[tuple[str, str], object] = {}
 _last_call: dict[str, float] = {}
+_throttle = threading.Lock()
 
 
 def _complete(p: Profile, messages: list[dict], params: dict, json_out: bool) -> tuple[str, str, dict]:
@@ -96,11 +98,12 @@ def _complete(p: Profile, messages: list[dict], params: dict, json_out: bool) ->
     client = _clients.get((p.base_url, p.api_key))
     if client is None:
         client = _clients[(p.base_url, p.api_key)] = OpenAI(base_url=p.base_url, api_key=p.api_key, max_retries=5, timeout=180)
-    if p.rpm:  # simple spacing for rate-limited free APIs
-        wait = _last_call.get(p.backend, 0) + 60 / p.rpm - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        _last_call[p.backend] = time.monotonic()
+    if p.rpm:  # simple spacing for rate-limited free APIs; the lock keeps parallel callers in line
+        with _throttle:
+            wait = _last_call.get(p.backend, 0) + 60 / p.rpm - time.monotonic()
+            if wait > 0:
+                time.sleep(wait)
+            _last_call[p.backend] = time.monotonic()
     extra = {"response_format": {"type": "json_object"}} if json_out and p.json_mode else {}
     r = client.chat.completions.create(model=p.model, messages=messages, **params, **extra)
     usage = r.usage.model_dump() if r.usage else {}

@@ -1,0 +1,36 @@
+"""rag.answer without network: prompt assembly, citations, multi-turn query."""
+
+from rag.answer import SYSTEM, citations, messages_for, retrieval_query, source_block, year_label
+from rag.questions import Question
+
+HITS = [
+    dict(chunk_id="a#001", header="T | Q1", kind="faq", tax_year=2563, year=None, flags=[], text="ลดหย่อน 30,000 บาท"),
+    dict(chunk_id="b~001", header="กฎกระทรวง", kind="กฎกระทรวง", tax_year=None, year="2545", flags=[], text="ข้อ 1"),
+    dict(chunk_id="c~001", header="โปสเตอร์", kind="image", tax_year=None, year=None, flags=["unverified"], text="60,000"),
+]
+
+
+def test_year_label_prefers_tax_year_then_document_year():
+    assert [year_label(h) for h in HITS] == ["ปีภาษี 2563", "พ.ศ. 2545", "ไม่ระบุปี"]
+
+
+def test_source_block_numbers_and_flags_unverified_text():
+    assert source_block(1, HITS[0]).startswith("[1] T | Q1\nประเภท: คำถาม-คำตอบ กรมสรรพากร | ปีภาษี 2563\n")
+    assert "ยังไม่ได้ตรวจทาน" in source_block(3, HITS[2]) and "ยังไม่ได้ตรวจทาน" not in source_block(2, HITS[1])
+
+
+def test_citations_map_numbers_to_chunks_and_report_strays():
+    cited, bad = citations("ได้ 30,000 บาท [1] ตามกฎกระทรวง [2][1] และ [7]", HITS)
+    assert cited == ["a#001", "b~001"] and bad == [7]
+
+
+def test_messages_put_sources_only_on_the_current_turn():
+    msgs = messages_for("แล้วถ้ามีโบนัสล่ะ?", HITS, [("เงินเดือน 25,000 ต้องเสียภาษีไหม?", "ไม่ต้อง [1]")])
+    assert [m["role"] for m in msgs] == ["system", "user", "assistant", "user"]
+    assert msgs[0]["content"] == SYSTEM and msgs[1]["content"] == "เงินเดือน 25,000 ต้องเสียภาษีไหม?"
+    assert msgs[3]["content"].startswith("เอกสารอ้างอิง\n\n[1]") and msgs[3]["content"].endswith("คำถาม: แล้วถ้ามีโบนัสล่ะ?")
+
+
+def test_retrieval_query_joins_earlier_turns():
+    q = lambda t, n: Question(id=f"Q{n}", category="c", difficulty=None, text=t, kind="multi_turn", set="A", turn=n)  # noqa: E731
+    assert retrieval_query(q("ล่ะ?", 2), [q("เงินเดือน", 1)]) == "เงินเดือน\nล่ะ?"
