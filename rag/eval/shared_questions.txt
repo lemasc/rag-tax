@@ -1,0 +1,11 @@
+# shared review set drawn by rag.labels.draw_shared(seed=20261021) from the dev subset
+Q0002
+Q0124
+Q0145
+Q0207
+Q0223
+Q0262
+Q0282
+Q0301
+Q0323
+Q0369

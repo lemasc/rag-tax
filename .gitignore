@@ -10,3 +10,5 @@ notebooks/.ipynb_checkpoints/
 __pycache__/
 # API keys and local endpoints (see .env.example)
 .env
+# marimo session caches
+__marimo__/
