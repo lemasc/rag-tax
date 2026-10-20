@@ -4,6 +4,7 @@
 analysis/out/emb.npy
 rag/out/dense/
 rag/out/sparse_tokens.jsonl
+rag/out/llm_cache/
 notebooks/.ipynb_checkpoints/
 .ipynb_checkpoints/
 __pycache__/

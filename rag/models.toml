@@ -1,0 +1,50 @@
+# LLM backends and named model profiles for rag.llm. A run names profiles (`--gen gemma-31b --judge judge`); this
+# file is the record of what each name meant, so change a profile's model only by adding a new profile.
+#
+# Backend: base_url (or base_url_env) and key_env, the .env variable holding the API key. `rpm` throttles requests
+# per minute for rate-limited free APIs. `json_mode` says whether the backend accepts response_format=json_object.
+# Profile: backend, model id as the backend names it, and `params` passed to chat.completions.create unchanged
+# (reasoning models reject temperature, so it is not set globally).
+#
+# Model ids marked TODO are filled in after `uv run python -m rag.llm models <backend>` lists what the key can see.
+# Base URLs marked "unverified" come from vendor pages and have not been tried.
+
+[backends.openai]
+base_url = "https://api.openai.com/v1"
+key_env = "OPENAI_API_KEY"
+json_mode = true
+
+[backends.openrouter]
+base_url = "https://openrouter.ai/api/v1"
+key_env = "OPENROUTER_API_KEY"
+json_mode = true
+
+[backends.typhoon]
+base_url = "https://api.opentyphoon.ai/v1"  # unverified
+key_env = "TYPHOON_API_KEY"
+
+[backends.thaillm]
+base_url_env = "THAILLM_BASE_URL"  # unverified: not known to be OpenAI-compatible
+key_env = "THAILLM_API_KEY"
+rpm = 150
+
+[backends.iapp]
+base_url = "https://api.iapp.co.th/v3/llm/openthai2p0"  # unverified
+key_env = "IAPP_API_KEY"
+rpm = 25
+
+[backends.ollama]
+base_url_env = "OLLAMA_BASE_URL"
+key = "ollama"  # Ollama ignores the key, the client needs one
+
+# ---- profiles
+
+[models.judge]  # fixed for the whole project: changing it invalidates earlier scores
+backend = "openai"
+model = ""  # TODO: a strong OpenAI model, not the mini/nano tier
+params = {}
+
+[models.gpt-mini]  # development stand-in generator until OpenRouter/Thai keys exist; not reported (judge's family)
+backend = "openai"
+model = ""  # TODO
+params = {}

@@ -1,10 +1,10 @@
 # Generation and evaluation: plan
 
-Status: draft 2026-10-19, not started. Follows `rag-baseline.md` (retrieval works: dense, sparse, hybrid). This plan adds answer generation, the evaluation harness and the first ablations. Each step lists what it produces and what would make it done.
+Status: draft 2026-10-19. Steps 1–2 built 2026-10-20 (`rag/llm.py`, `rag/models.toml`, `rag/questions.py`, dev subset in `rag/eval/dev_questions.txt`); model ids not set until keys exist. Follows `rag-baseline.md` (retrieval works: dense, sparse, hybrid). This plan adds answer generation, the evaluation harness and the first ablations. Each step lists what it produces and what would make it done.
 
 ## Inputs and constraints
 
-- **Questions:** `tax-questions-pass-1.csv`, 369 questions, 20 categories, difficulty easy/medium/hard. No reference answers, no gold sources. No question names a tax year; 23 carry an amount.
+- **Questions:** `rag/eval/tax-questions-pass-1.csv`, 369 questions, 20 categories, difficulty easy/medium/hard. No reference answers, no gold sources. No question names a tax year; 23 carry an amount.
   - Multi-turn: 12 questions in sets tagged `[รอบ n: ชุด X]`.
   - Behavioural, where retrieval is not the point: `โจทย์ข้อมูลไม่ครบ` (15, should ask back), `ความเข้าใจผิด` (15, should correct the premise), `นอกขอบเขต` (1, Q0369, also missing its difficulty).
   - Thin corpus coverage: crypto (4 chunks), freelance (1), online selling and part-time (0).

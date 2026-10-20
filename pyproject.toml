@@ -36,6 +36,8 @@ rag = [
     "scipy>=1.14",
     "torch",
     "sentence-transformers>=3.0",
+    "openai>=3.35.1",
+    "python-dotenv>=1.2.4",
 ]
 dev = ["pytest>=9.1.1"]
 
