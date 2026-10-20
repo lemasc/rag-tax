@@ -41,10 +41,12 @@ key = "ollama"  # Ollama ignores the key, the client needs one
 
 [models.judge]  # fixed for the whole project: changing it invalidates earlier scores
 backend = "openai"
-model = ""  # TODO: a strong OpenAI model, not the mini/nano tier
-params = {}
+# Undated alias (sizes: luna < terra < sol < astra); the API reports no snapshot, so judge every variant of an
+# experiment in one session and record the date. Chosen 2026-10-20 over astra on cost; terra is the fallback.
+model = "gpt-6-sol"
+params = { reasoning_effort = "medium" }  # reasoning models reject temperature
 
 [models.gpt-mini]  # development stand-in generator until OpenRouter/Thai keys exist; not reported (judge's family)
 backend = "openai"
-model = ""  # TODO
-params = {}
+model = "gpt-6-luna"
+params = { reasoning_effort = "low" }
