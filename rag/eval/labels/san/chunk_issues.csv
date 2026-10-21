@@ -1,0 +1,15 @@
+chunk_id,issues,note,question_id,labelled_at
+550~001,garbled,เป็นตารางแปลก ๆ ต้องดูด้วยตา,Q0002,2026-10-21T11:04:58+0700
+551~001,mixed,"table is inline with answer and might be outdated, does it?",Q0262,2026-10-21T13:54:27+0700
+555~001,,tables look not giving any context. normalize?,Q0323,2026-10-21T15:08:14+0700
+555~002,,tables look not giving any context. normalize?,Q0323,2026-10-21T15:08:14+0700
+558~002,,reflag image on this doc. reading with context suggest that partial necessary instructions are extracted to image but got lost. the image alone is too weak to be a doc.,Q0145,2026-10-21T14:57:47+0700
+61081#051,garbled,,Q0145,2026-10-21T14:57:47+0700
+61549#029,,line breaks on 61549 too frequent. cleaning issue,Q0145,2026-10-21T14:57:47+0700
+61549#091,other,e-Filling instructions are spread to multiple F&Q docs but they are staled. This chunk for example is out of dated. Still flag as partially relevant to the question.,Q0145,2026-10-21T14:57:47+0700
+61549#111,,line breaks on 61549 too frequent. cleaning issue,Q0145,2026-10-21T14:57:47+0700
+62149#001~002,cut,ข้อความตัดจาก 62149#001~001,Q0002,2026-10-21T11:04:58+0700
+62777#028,other,duplicate with 60056#012,Q0282,2026-10-21T13:47:40+0700
+63437~002,other,semantic chunking - headers are in static images; fallback to alt img text which lost hierarchy,Q0207,2026-10-21T13:41:36+0700
+dbff763e351b~002,mixed,คำสั่งสรรพากรพูดถึงอสังหา แต่แค่นิยามผู้มีหน้าที่เสียภาษีใหม่อีกรอบข้างบน จึงดึง chunk นี้มาโดยไม่จำเป็น,Q0002,2026-10-21T14:00:40+0700
+fddbe07ce2d8~006,cut;mixed,semantic chunking: example is from previous มาตรา and cut off the next text as well,Q0262,2026-10-21T13:54:27+0700

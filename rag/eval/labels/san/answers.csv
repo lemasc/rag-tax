@@ -1,0 +1,13 @@
+run_id,question_id,grounded,correct,useful,behaviour,tags,note,labelled_at,rubric
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0002,2,2,2,na,,,2026-10-21T14:00:40+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0124,2,2,2,na,,"""b51f36316f7d~004"" น่าจะเกี่ยว แต่ขึ้นอยู่กับการตีความ และการคำนวนมีมาตราอื่นที่เกี่ยวข้องข้างบนแต่ไม่ได้ดึงลงมา, ""e0fb2b1a35ea~002"" ไม่แน่ใจว่าถูกมั้ย นายจ้าง (บริษัท?) ก็น่าจะออกภาษีให้ได้",2026-10-21T11:41:01+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0145,2,1,1,na,,,2026-10-21T14:57:47+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0207,2,2,0,na,retrieval_miss,,2026-10-21T13:41:36+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0223,2,2,0,na,retrieval_miss,,2026-10-21T14:08:09+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0262,2,1,2,na,,,2026-10-21T13:57:26+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0282,2,2,2,na,,,2026-10-21T13:47:40+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0301,2,2,0,na,retrieval_miss;one_doc,,2026-10-21T14:11:20+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0323,2,1,1,na,outdated,"This is one of the failures on chunking. From my understanding, reasoning in this question depends on ตารางเงินได้สุทธิแบบขั้นบันได but known of it refers to that. Those chunks that refer require linking other items such as วิธีที่ 2 which none of the retreived document has it.
+
+Most docs are about manual calculation. Recent e-Filling allows prefilling numbers from known source, which might can be used as a rough estimate, does it?",2026-10-21T15:08:14+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0369,2,2,1,yes,,"the reason this is considered ""out of scope"" because to answer this do we need ภาษีอากรสแตมป์?",2026-10-21T13:59:50+0700,v2

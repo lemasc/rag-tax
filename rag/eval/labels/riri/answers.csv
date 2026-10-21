@@ -1,15 +1,22 @@
-run_id,question_id,grounded,correct,useful,behaviour,tags,note,labelled_at
-20261020-dev-gpt-mini-hybrid-k5-v1,Q0002,2,2,2,na,,,2026-10-20T17:11:45+0700
-20261020-dev-gpt-mini-hybrid-k5-v1,Q0009,2,1,1,na,other,อธิบายเรื่องที่เกี่ยวข้องไม่ครบ ทั้งๆที่เอกสารดึงมาถูก,2026-10-20T16:11:59+0700
-20261020-dev-gpt-mini-hybrid-k5-v1,Q0023,1,2,2,yes,,,2026-10-20T17:40:50+0700
-20261020-dev-gpt-mini-hybrid-k5-v1,Q0029,2,2,2,na,,,2026-10-20T19:00:09+0700
-20261020-dev-gpt-mini-hybrid-k5-v1,Q0091,1,2,1,yes,one_doc,,2026-10-20T19:37:08+0700
-20261020-dev-gpt-mini-hybrid-k5-v1,Q0126,2,2,2,yes,,,2026-10-20T19:45:24+0700
-20261020-dev-gpt-mini-hybrid-k5-v1,Q0181,2,2,2,na,,,2026-10-20T19:20:51+0700
-20261020-dev-gpt-mini-hybrid-k5-v1,Q0238,2,2,2,yes,,,2026-10-20T20:03:02+0700
-20261020-dev-gpt-mini-hybrid-k5-v1,Q0272,2,2,1,na,retrieval_miss,ดึงเอกสารมาได้ แต่ไม่เอามาตอบจ้ะ,2026-10-20T19:58:21+0700
-20261020-dev-gpt-mini-hybrid-k5-v1,Q0318,2,2,2,na,,,2026-10-20T20:08:56+0700
-20261020-dev-gpt-mini-hybrid-k5-v1,Q0323,2,2,2,yes,,,2026-10-20T15:51:15+0700
-20261020-dev-gpt-mini-hybrid-k5-v1,Q0366,2,2,2,yes,,,2026-10-20T18:46:52+0700
-20261020-dev-gpt-mini-hybrid-k5-v1,Q0367,2,2,2,yes,,,2026-10-20T17:59:41+0700
-20261020-dev-gpt-mini-hybrid-k5-v1,Q0369,2,2,2,yes,other,ผมไม่แน่ใจว่ามียัง แต่เอามาให้เพิ่ม https://www.rd.go.th/region/04/fileadmin/063_saraburi/HotArticle/2561/August_2018_lottery.pdf,2026-10-20T17:08:27+0700
+run_id,question_id,grounded,correct,useful,behaviour,tags,note,labelled_at,rubric
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0002,2,2,2,na,,,2026-10-21T15:10:55+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0009,2,1,1,na,other,อธิบายเรื่องที่เกี่ยวข้องไม่ครบ ทั้งๆที่เอกสารดึงมาถูก,2026-10-20T16:11:59+0700,
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0023,1,2,2,yes,,,2026-10-20T17:40:50+0700,
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0029,2,2,2,na,,,2026-10-20T19:00:09+0700,
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0091,1,2,1,yes,one_doc,,2026-10-20T19:37:08+0700,
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0124,2,2,2,na,,,2026-10-21T14:58:03+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0126,2,2,2,yes,,,2026-10-20T19:45:24+0700,
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0145,0,0,1,na,,,2026-10-21T15:04:04+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0181,2,2,2,na,,,2026-10-20T19:20:51+0700,
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0207,1,2,2,na,,,2026-10-21T15:10:01+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0223,1,1,1,na,,,2026-10-21T15:24:16+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0238,2,2,2,yes,,,2026-10-20T20:03:02+0700,
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0262,1,1,2,na,,,2026-10-21T15:28:26+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0272,2,2,1,na,retrieval_miss,ดึงเอกสารมาได้ แต่ไม่เอามาตอบจ้ะ,2026-10-20T19:58:21+0700,
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0282,2,2,2,na,,,2026-10-21T15:31:03+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0301,2,1,2,na,,,2026-10-21T15:36:09+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0318,2,2,2,na,,,2026-10-20T20:08:56+0700,
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0323,2,2,2,na,,,2026-10-21T15:38:51+0700,v2
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0366,2,2,2,yes,,,2026-10-20T18:46:52+0700,
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0367,2,2,2,yes,,,2026-10-20T17:59:41+0700,
+20261020-dev-gpt-mini-hybrid-k5-v1,Q0369,1,1,2,yes,other,ผมไม่แน่ใจว่ามียัง แต่เอามาให้เพิ่ม https://www.rd.go.th/region/04/fileadmin/063_saraburi/HotArticle/2561/August_2018_lottery.pdf,2026-10-21T15:42:18+0700,v2
