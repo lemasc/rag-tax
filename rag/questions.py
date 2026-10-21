@@ -7,6 +7,7 @@ Kinds, from the category column:
 - out_of_scope  นอกขอบเขต: the right answer declines or says the corpus does not cover it
 - normal        everything else
 Behavioural kinds (ask_back, misconception, out_of_scope) are scored on behaviour, not on retrieval.
+KIND_OVERRIDES corrects the kind of a question whose category turned out wrong; the CSV keeps its category.
 
 The dev subset is used while iterating; it is drawn once and saved, so every run uses the same questions:
 2 per category (seeded), the out-of-scope question, and one whole multi-turn set.
@@ -28,6 +29,10 @@ DEV = ROOT / "rag" / "eval" / "dev_questions.txt"
 
 KINDS = {"คำถามหลายรอบ": "multi_turn", "โจทย์ข้อมูลไม่ครบ": "ask_back", "ความเข้าใจผิด": "misconception", "นอกขอบเขต": "out_of_scope"}
 BEHAVIOURAL = {"ask_back", "misconception", "out_of_scope"}
+# Q0369 (ล็อตเตอรี่): filed as out of scope, but มาตรา 42(11) and the ภ.ง.ด.94 FAQ answer it (government lottery
+# prizes are exempt). Retrieval misses it because no chunk says ล็อตเตอรี่. Proposed 2026-10-21 for the reviewers
+# to confirm (review-calibration-1.th.md, item 4); a normal question and a vocabulary-mismatch example.
+KIND_OVERRIDES = {"Q0369": "normal"}
 TURN_TAG = re.compile(r"\s*\[รอบ\s*(\d+)\s*:\s*ชุด\s*(\w+)\]\s*$")
 DEV_PER_CATEGORY = 2
 DEV_SEED = 20261020
@@ -48,7 +53,7 @@ def parse(row: dict) -> Question:
     text, set_, turn = row["คำถาม"].strip(), None, None
     if m := TURN_TAG.search(text):
         text, turn, set_ = text[: m.start()].strip(), int(m.group(1)), m.group(2)
-    kind = KINDS.get(row["หมวด"], "normal")
+    kind = KIND_OVERRIDES.get(row["ID"], KINDS.get(row["หมวด"], "normal"))
     if (kind == "multi_turn") != (set_ is not None):
         raise ValueError(f"{row['ID']}: turn tag and category disagree ({row['หมวด']!r}, set {set_!r})")
     return Question(id=row["ID"], category=row["หมวด"], difficulty=row["ระดับความยาก"] or None, text=text, kind=kind,
@@ -76,9 +81,10 @@ def history(q: Question, qs: list[Question]) -> list[Question]:
 def draw_dev(qs: list[Question], seed: int = DEV_SEED) -> list[str]:
     rng = random.Random(seed)
     ids = []
-    for cat in sorted({q.category for q in qs if q.kind not in ("multi_turn", "out_of_scope")}):
+    # by category, not kind, so a kind override does not change the draw
+    for cat in sorted({q.category for q in qs if KINDS.get(q.category) not in ("multi_turn", "out_of_scope")}):
         ids += rng.sample(sorted(q.id for q in qs if q.category == cat), DEV_PER_CATEGORY)
-    ids += [q.id for q in qs if q.kind == "out_of_scope"]
+    ids += [q.id for q in qs if KINDS.get(q.category) == "out_of_scope"]
     one_set = rng.choice(sorted({q.set for q in qs if q.set}))
     ids += [q.id for q in qs if q.set == one_set]
     order = {q.id: i for i, q in enumerate(qs)}
