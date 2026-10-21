@@ -1,6 +1,6 @@
 # Human review rubric
 
-Status: v2, 2026-10-21. v1 (the draft) left `behaviour` undefined on normal questions and did not say how to score a refusal; shared-set agreement on `behaviour` was 31% (see *Changes from v1*). Re-label the shared set under v2. The values and tags live in `rag/labels.py`; keep the two in step. The LLM judge (plan step 5) will use the same rubric, so these labels double as its validation sample.
+Status: v2, 2026-10-21. v1 (the draft) left `behaviour` undefined on normal questions and did not say how to score a refusal; shared-set agreement on `behaviour` was 31% (see *Changes from v1*). Re-label the shared set under v2. The values and tags live in `rag/labels.py`, and reviewers read the Thai version, `review-rubric.th.md`, inside the notebook; keep all three in step. Bump `RUBRIC_VERSION` in `rag/labels.py` when a change alters how an item is scored, and update the change notice at the top of `rag/review.py`. The LLM judge (plan step 5) will use the same rubric, so these labels double as its validation sample.
 
 ## How the review is organised
 
@@ -79,4 +79,4 @@ The first labels (run `20261020-dev-gpt-mini-hybrid-k5-v1`, three reviewers) sho
 - A refusal on a normal question got `correct=0` from one reviewer ("it fails the taxpayer") and `correct=2` from another ("it says nothing false"). The refusal rule settles it: correct judges the statements, useful judges whether the question was answered.
 - `retrieval_miss` was used for "retrieved but not used"; that is now `ignored_source`. `outdated` was used for old sources that the answer did not use.
 
-Old labels are kept as they are; agreement and the judge comparison now ignore `behaviour` outside behavioural questions. The judge prompt follows this version as v2.
+Old labels are kept, and each answer label now records the rubric version it was made under (rows without one are v1). Shared questions labelled under v1 come back into each reviewer's queue, pre-filled, and shared-set agreement counts v2 labels only. Agreement and the judge comparison also ignore `behaviour` outside behavioural questions. The reviewers never saw v1 itself: the notebook showed only one-line item descriptions. v2 is shown in full in the notebook. The judge prompt follows this version as v2.

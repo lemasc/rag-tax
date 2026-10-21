@@ -13,7 +13,12 @@ have not done, then the questions nobody has labelled for this run. Multi-turn s
 sees the unclaimed questions in their own order (a hash of their name and the question), so people working at the
 same time rarely start on the same one; when they do, it only adds overlap.
 
-Rubric and tags: docs/plans/review-rubric.md (keep the two in step).
+Rubric versions: each answer label records the RUBRIC_VERSION it was made under. A shared question labelled under an
+older version comes back into that reviewer's queue, and agreement counts only current labels, so a rubric change is
+measured on labels made under it.
+
+Rubric and tags: docs/plans/review-rubric.md, and its Thai version for reviewers, review-rubric.th.md (keep all three
+in step).
 """
 
 import csv
@@ -64,7 +69,8 @@ TAGS = {
     "other": "อื่น ๆ (เขียนในหมายเหตุ)",
 }
 
-ANSWER_FIELDS = ["run_id", "question_id", "grounded", "correct", "useful", "behaviour", "tags", "note", "labelled_at"]
+RUBRIC_VERSION = "v2"  # saved with each answer label; rows from before the column existed are v1
+ANSWER_FIELDS = ["run_id", "question_id", "grounded", "correct", "useful", "behaviour", "tags", "note", "labelled_at", "rubric"]
 CHUNK_FIELDS = ["question_id", "chunk_id", "relevance", "note", "labelled_at"]
 
 
@@ -111,7 +117,7 @@ def save(reviewer: str, run_id: str, question_id: str, answer: dict, chunks: dic
     now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     a = answer_labels(reviewer)
     a[(run_id, question_id)] = {f: "" for f in ANSWER_FIELDS} | {k: v for k, v in answer.items() if k in ANSWER_FIELDS} | dict(
-        run_id=run_id, question_id=question_id, labelled_at=now)
+        run_id=run_id, question_id=question_id, labelled_at=now, rubric=RUBRIC_VERSION)
     _write(LABELS / reviewer / "answers.csv", ANSWER_FIELDS, sorted(a.values(), key=lambda r: (r["run_id"], r["question_id"])))
     c = chunk_labels(reviewer)
     for chunk_id, v in chunks.items():
@@ -122,6 +128,10 @@ def save(reviewer: str, run_id: str, question_id: str, answer: dict, chunks: dic
 
 def is_complete(label: dict | None) -> bool:
     return bool(label) and all(label[k] for k in ("grounded", "correct", "useful", "behaviour"))
+
+
+def is_current(label: dict | None) -> bool:
+    return is_complete(label) and label.get("rubric") == RUBRIC_VERSION
 
 
 # ---------------------------------------------------------------- assignment
@@ -153,16 +163,17 @@ class Item:
 
 def queue(reviewer: str, run_id: str, question_ids: list[str], shared: list[str]) -> tuple[list[Item], list[Item]]:
     """(to do, all) for a reviewer in a run; `all` is in file order. To do: the shared questions they have not
-    finished (file order), then questions nobody has finished in the reviewer's own order; a multi-turn set another
-    reviewer has started is left to them, and a set's turns stay together and in order."""
+    finished under the current rubric (file order), then questions nobody has finished in the reviewer's own order;
+    a multi-turn set another reviewer has started is left to them, and a set's turns stay together and in order."""
     done = {r: {q for (rid, q), lab in answer_labels(r).items() if rid == run_id and is_complete(lab)} for r in reviewers()}
     set_of = {q.id: q.set for q in load()}
     items = [Item(q, q in shared, sorted(r for r, d in done.items() if q in d)) for q in question_ids]
     mine = done.get(reviewer, set())
+    mine_current = {q for (rid, q), lab in answer_labels(reviewer).items() if rid == run_id and is_current(lab)}
     others_sets = {set_of[i.question_id] for i in items if set_of[i.question_id] and set(i.done_by) - {reviewer}}
     my_sets = {set_of[q] for q in mine if set_of.get(q)}
-    todo = [i for i in items if i.question_id not in mine and (
-        i.shared or (not i.done_by and (set_of[i.question_id] is None or set_of[i.question_id] not in others_sets - my_sets)))]
+    todo = [i for i in items if (i.question_id not in mine_current if i.shared else i.question_id not in mine and not i.done_by and (
+        set_of[i.question_id] is None or set_of[i.question_id] not in others_sets - my_sets))]
     position = {q: n for n, q in enumerate(question_ids)}
 
     def order(i: Item) -> tuple:
@@ -176,12 +187,12 @@ def queue(reviewer: str, run_id: str, question_ids: list[str], shared: list[str]
 
 def agreement(run_id: str, question_ids: list[str]) -> dict[str, tuple[int, float]]:
     """Exact agreement between reviewers on the given questions: field -> (number of reviewer pairs compared,
-    share of pairs with the same value). Behaviour is compared on behavioural questions only (it is "na" on the
+    share of pairs with the same value), current-rubric labels only. Behaviour is compared on behavioural questions only (it is "na" on the
     rest); chunk relevance is compared per (question, chunk)."""
     from itertools import combinations
 
     revs = reviewers()
-    ans = {r: answer_labels(r) for r in revs}
+    ans = {r: {k: lab for k, lab in answer_labels(r).items() if is_current(lab)} for r in revs}
     kind = {q.id: q.kind for q in load()}
     out = {}
     for f in ("grounded", "correct", "useful", "behaviour"):

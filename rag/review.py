@@ -28,12 +28,23 @@ def _():
 
 
 @app.cell
-def _(labels, mo):
+def _(ROOT, labels, mo):
     known = labels.reviewers()
     pick_name = mo.ui.dropdown(known, label="ผู้ตรวจ (Reviewer)", value=known[0] if len(known) == 1 else None)
     new_name = mo.ui.text(label="หรือชื่อใหม่", placeholder="a-z 0-9 - _")
     pick_run = mo.ui.dropdown(labels.runs(), value=(labels.runs() or [None])[0], label="Run")
-    mo.vstack([mo.md("## ตรวจคำตอบ (Answer review)"), mo.hstack([pick_name, new_name], justify="start"), pick_run])
+    _rubric = (ROOT / "docs" / "plans" / "review-rubric.th.md").read_text(encoding="utf-8").split("\n", 1)[1]  # line 1 is for maintainers
+    _changes = mo.callout(mo.md(f"""**เกณฑ์การตรวจปรับเป็น {labels.RUBRIC_VERSION} (21 ต.ค. 2569)** กรุณาอ่านเกณฑ์ด้านล่างก่อนตรวจต่อ สิ่งที่เปลี่ยนจากที่ทำกันมา:
+
+- **behaviour** ให้เฉพาะคำถามที่ "ควรถามกลับ" "ควรแก้ความเข้าใจผิด" หรือ "นอกขอบเขต" เท่านั้น ข้ออื่นไม่มีช่องนี้แล้ว (เดิมหลายคนใช้เป็นคะแนนว่าตอบดี)
+- **คำตอบที่ปฏิเสธหรือบอกว่าเอกสารไม่ครอบคลุม**: correct ดูจากสิ่งที่พูดจริง ส่วนที่ไม่ได้ตอบให้หักที่ useful
+- **แท็ก**: เพิ่ม `ignored_source` (ดึงเอกสารมาได้แต่ไม่ใช้) · `retrieval_miss` ใช้เมื่อไม่มีเอกสารไหนตอบได้เท่านั้น · `outdated` ใช้เมื่อคำตอบใช้ข้อมูลเก่าเท่านั้น
+- **ข้อในชุดร่วม (★) ที่ตรวจด้วยเกณฑ์เดิมจะกลับมาอยู่ในคิว** ขอให้ตรวจใหม่ ค่าเดิมเติมไว้ให้แล้ว แก้เฉพาะที่ไม่ตรงเกณฑ์ใหม่"""), kind="warn")
+    mo.vstack([
+        mo.md("## ตรวจคำตอบ (Answer review)"), _changes,
+        mo.accordion({"📋 เกณฑ์การตรวจ (อ่านก่อนเริ่ม)": mo.md(_rubric)}),
+        mo.hstack([pick_name, new_name], justify="start"), pick_run,
+    ])
     return new_name, pick_name, pick_run
 
 
@@ -76,7 +87,7 @@ def _(get_saved, labels, mo, records, reviewer, run_id, shared):
     get_saved()
     todo, items = labels.queue(reviewer, run_id, list(records), shared)
     _mine = sum(reviewer in i.done_by for i in items)
-    _shared_done = sum(reviewer in i.done_by for i in items if i.shared)
+    _shared_done = len(shared) - sum(i.shared for i in todo)  # under the current rubric
     _any = sum(bool(i.done_by) for i in items)
     mo.md(
         f"**{reviewer}**: ตรวจแล้ว {_mine} ข้อ · ชุดร่วม {_shared_done}/{len(shared)} · "
@@ -92,10 +103,11 @@ def _(mo):
 
 
 @app.cell
-def _(items, mo, questions, show_all, todo):
+def _(items, mo, questions, reviewer, show_all, todo):
     def _label(i):
         q = questions[i.question_id]
-        tag = "★ ชุดร่วม · " if i.shared else ""
+        redo = i.shared and reviewer in i.done_by and i in todo  # labelled under an older rubric
+        tag = ("★ ชุดร่วม · " if i.shared else "") + ("ตรวจใหม่ตามเกณฑ์ใหม่ · " if redo else "")
         turn = f" [ชุด {q.set} รอบ {q.turn}]" if q.set else ""
         by = f" · ตรวจโดย {', '.join(i.done_by)}" if i.done_by else ""
         return f"{tag}{q.id}{turn} {q.text[:60]}{by}"

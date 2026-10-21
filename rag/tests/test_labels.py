@@ -87,3 +87,16 @@ def test_agreement_compares_behaviour_on_behavioural_questions_only():
     labels.save("ann", "r", ask_back, FULL | {"behaviour": "yes"}, {})
     labels.save("bob", "r", ask_back, FULL | {"behaviour": "yes"}, {})
     assert labels.agreement("r", [normal, ask_back])["behaviour"] == (1, 1.0)
+
+
+def test_shared_labels_from_an_older_rubric_come_back_and_leave_agreement():
+    labels.save("ann", "r", "Q0001", FULL, {})
+    labels.save("ann", "r", "Q0002", FULL, {})
+    labels.save("bob", "r", "Q0001", FULL, {})
+    path = labels.LABELS / "ann" / "answers.csv"
+    rows = [r | {"rubric": "" if r["question_id"] == "Q0001" else r["rubric"]} for r in labels._read(path)]
+    labels._write(path, labels.ANSWER_FIELDS, rows)  # Q0001 as if labelled before the rubric column existed
+    todo, items = labels.queue("ann", "r", ["Q0001", "Q0002", "Q0003"], ["Q0001", "Q0002"])
+    assert [i.question_id for i in todo] == ["Q0001", "Q0003"]
+    assert items[0].done_by == ["ann", "bob"]  # still counts as labelled for the first-come split
+    assert labels.agreement("r", ["Q0001"])["grounded"][0] == 0
