@@ -100,3 +100,16 @@ def test_shared_labels_from_an_older_rubric_come_back_and_leave_agreement():
     assert [i.question_id for i in todo] == ["Q0001", "Q0003"]
     assert items[0].done_by == ["ann", "bob"]  # still counts as labelled for the first-come split
     assert labels.agreement("r", ["Q0001"])["grounded"][0] == 0
+
+
+
+def test_chunk_issues_belong_to_the_chunk_and_clear_when_emptied():
+    labels.save("ann", "r", "Q1", FULL, {"c1": {"relevance": "2"}}, {"c1": {"issues": "cut;garbled"}, "c2": {}})
+    labels.save("bob", "r", "Q2", FULL, {}, {"c1": {"note": "หัวข้อผิด"}})
+    assert set(labels.chunk_quality("ann")) == {"c1"} and labels.chunk_quality("ann")["c1"]["question_id"] == "Q1"
+    labels.save("ann", "r", "Q3", FULL, {}, {"c1": {"issues": "cut;garbled"}})  # same flag seen again: unchanged
+    assert labels.chunk_quality("ann")["c1"]["question_id"] == "Q1"
+    flagged = labels.chunk_issues()
+    assert list(flagged) == ["c1"] and {r["reviewer"] for r in flagged["c1"]} == {"ann", "bob"}
+    labels.save("ann", "r", "Q3", FULL, {}, {"c1": {}})
+    assert labels.chunk_quality("ann") == {} and [r["reviewer"] for r in labels.chunk_issues()["c1"]] == ["bob"]

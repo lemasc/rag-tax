@@ -55,6 +55,10 @@ Score against the retrieved sources and your own knowledge of current PIT law. P
 
 A grounded answer can still be incorrect: the corpus holds outdated material, and an answer faithful to a 2560 FAQ quotes a 2560 limit. Score both items separately; that difference is one of the things the evaluation is meant to show.
 
+## Per retrieved chunk: quality issues (optional)
+
+Not part of the rubric and not scored: feedback for the chunker. Under each chunk the reviewer can pick any of `cut` (cut mid-content), `garbled` (broken vowels or tone marks, bad characters), `header` (heading does not match the content), `mixed` (several topics, or old and new law, in one chunk), `other`, plus a note. A flag belongs to the chunk, not the question: it is stored once per reviewer in `chunk_issues.csv`, shows again on every question that retrieves the chunk, and clearing it removes it everywhere. `python -m rag.labels --chunk-issues` lists every flagged chunk. Adding this did not change the rubric version.
+
 ## Failure tags (any number)
 
 | Tag | Meaning |

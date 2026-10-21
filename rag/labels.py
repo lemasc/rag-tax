@@ -4,6 +4,7 @@ over this module, so another front end can use the same files.
 Files, one directory per reviewer, so reviewers never write to the same file:
   rag/eval/labels/<reviewer>/answers.csv  one row per (run, question): rubric scores, failure tags, note
   rag/eval/labels/<reviewer>/chunks.csv   one row per (question, chunk): relevance 0/1/2
+  rag/eval/labels/<reviewer>/chunk_issues.csv  one row per flagged chunk: quality issues, for every question it appears in
 Chunk relevance does not depend on the run, so a later run that retrieves the same chunk for the same question
 reuses the label; answer labels belong to one run's answer.
 
@@ -70,8 +71,18 @@ TAGS = {
 }
 
 RUBRIC_VERSION = "v2"  # saved with each answer label; rows from before the column existed are v1
+# chunk quality, optional and outside the rubric: feedback for the chunker (`python -m rag.labels --chunk-issues`)
+CHUNK_ISSUES = {
+    "cut": "ตัดกลางเนื้อหา (ขาดต้นหรือท้าย)",
+    "garbled": "ข้อความเพี้ยน (สระ/วรรณยุกต์ผิด ตัวอักษรเสีย)",
+    "header": "หัวข้อไม่ตรงกับเนื้อหา",
+    "mixed": "หลายเรื่อง หรือกฎหมายเก่ากับใหม่ ปนกันในชิ้นเดียว",
+    "other": "อื่น ๆ (เขียนในหมายเหตุ)",
+}
+
 ANSWER_FIELDS = ["run_id", "question_id", "grounded", "correct", "useful", "behaviour", "tags", "note", "labelled_at", "rubric"]
 CHUNK_FIELDS = ["question_id", "chunk_id", "relevance", "note", "labelled_at"]
+ISSUE_FIELDS = ["chunk_id", "issues", "note", "question_id", "labelled_at"]  # question_id: where it was last saved
 
 
 def check_name(name: str) -> str:
@@ -111,8 +122,15 @@ def chunk_labels(reviewer: str) -> dict[tuple[str, str], dict]:
     return {(r["question_id"], r["chunk_id"]): r for r in _read(LABELS / reviewer / "chunks.csv")}
 
 
-def save(reviewer: str, run_id: str, question_id: str, answer: dict, chunks: dict[str, dict]) -> None:
-    """Upsert one question's labels: the answer label and one row per chunk (chunk_id -> {relevance, note})."""
+def chunk_quality(reviewer: str) -> dict[str, dict]:
+    return {r["chunk_id"]: r for r in _read(LABELS / reviewer / "chunk_issues.csv")}
+
+
+def save(reviewer: str, run_id: str, question_id: str, answer: dict, chunks: dict[str, dict],
+         issues: dict[str, dict] | None = None) -> None:
+    """Upsert one question's labels: the answer label, one row per chunk (chunk_id -> {relevance, note}), and the
+    reviewer's chunk-quality flags (chunk_id -> {issues, note}; issues are CHUNK_ISSUES keys joined by ";"). A flag
+    belongs to the chunk, not the question; saving one with no issues and no note removes it."""
     reviewer = check_name(reviewer)
     now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     a = answer_labels(reviewer)
@@ -124,6 +142,18 @@ def save(reviewer: str, run_id: str, question_id: str, answer: dict, chunks: dic
         c[(question_id, chunk_id)] = dict(question_id=question_id, chunk_id=chunk_id, relevance=v.get("relevance", ""),
                                           note=v.get("note", ""), labelled_at=now)
     _write(LABELS / reviewer / "chunks.csv", CHUNK_FIELDS, sorted(c.values(), key=lambda r: (r["question_id"], r["chunk_id"])))
+    if issues is None:
+        return
+    q = chunk_quality(reviewer)
+    for chunk_id, v in issues.items():
+        row = dict(chunk_id=chunk_id, issues=v.get("issues", ""), note=v.get("note", ""), question_id=question_id, labelled_at=now)
+        if row["issues"] or row["note"]:
+            if (q.get(chunk_id, {}).get("issues"), q.get(chunk_id, {}).get("note")) != (row["issues"], row["note"]):
+                q[chunk_id] = row  # unchanged flags keep where and when they were made
+        else:
+            q.pop(chunk_id, None)
+    if q or (LABELS / reviewer / "chunk_issues.csv").exists():
+        _write(LABELS / reviewer / "chunk_issues.csv", ISSUE_FIELDS, sorted(q.values(), key=lambda r: r["chunk_id"]))
 
 
 def is_complete(label: dict | None) -> bool:
@@ -209,6 +239,15 @@ def agreement(run_id: str, question_ids: list[str]) -> dict[str, tuple[int, floa
     return out
 
 
+def chunk_issues() -> dict[str, list[dict]]:
+    """Flagged chunks across reviewers: chunk_id -> one row per reviewer who flagged it."""
+    out: dict[str, list[dict]] = {}
+    for r in reviewers():
+        for row in chunk_quality(r).values():
+            out.setdefault(row["chunk_id"], []).append(row | {"reviewer": r})
+    return dict(sorted(out.items()))
+
+
 def runs() -> list[str]:
     return sorted((p.name for p in RUNS.iterdir() if (p / "answers.jsonl").exists()), reverse=True) if RUNS.exists() else []
 
@@ -218,7 +257,16 @@ def main() -> None:
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--new-shared", action="store_true", help="draw the shared set and write it (refuses to overwrite)")
+    ap.add_argument("--chunk-issues", action="store_true", help="list the chunks reviewers flagged, for the chunker")
     a = ap.parse_args()
+    if a.chunk_issues:
+        flagged = chunk_issues()
+        for cid, rows in flagged.items():
+            print(cid)
+            for row in rows:
+                print(f"  {row['reviewer']:10s} {row['issues'] or '-':20s} {row['note']}  (seen in {row['question_id']})")
+        print(f"{len(flagged)} chunks flagged")
+        return
     if a.new_shared:
         if SHARED.exists():
             raise SystemExit(f"{SHARED} exists; delete it first (agreement on the old set is then lost)")

@@ -39,6 +39,7 @@ def _(ROOT, labels, mo):
 - **behaviour** ให้เฉพาะคำถามที่ "ควรถามกลับ" "ควรแก้ความเข้าใจผิด" หรือ "นอกขอบเขต" เท่านั้น ข้ออื่นไม่มีช่องนี้แล้ว (เดิมหลายคนใช้เป็นคะแนนว่าตอบดี)
 - **คำตอบที่ปฏิเสธหรือบอกว่าเอกสารไม่ครอบคลุม**: correct ดูจากสิ่งที่พูดจริง ส่วนที่ไม่ได้ตอบให้หักที่ useful
 - **แท็ก**: เพิ่ม `ignored_source` (ดึงเอกสารมาได้แต่ไม่ใช้) · `retrieval_miss` ใช้เมื่อไม่มีเอกสารไหนตอบได้เท่านั้น · `outdated` ใช้เมื่อคำตอบใช้ข้อมูลเก่าเท่านั้น
+- **ใหม่ (ไม่บังคับ)**: แจ้งปัญหาของชิ้นเอกสาร เช่น ตัดกลางประโยค ข้อความเพี้ยน ได้ใต้ปุ่มความเกี่ยวข้องของแต่ละชิ้น
 - **ข้อในชุดร่วม (★) ที่ตรวจด้วยเกณฑ์เดิมจะกลับมาอยู่ในคิว** ขอให้ตรวจใหม่ ค่าเดิมเติมไว้ให้แล้ว แก้เฉพาะที่ไม่ตรงเกณฑ์ใหม่"""), kind="warn")
     mo.vstack([
         mo.md("## ตรวจคำตอบ (Answer review)"), _changes,
@@ -126,6 +127,7 @@ def _(BEHAVIOURAL, KIND_TH, chunks, html, labels, mo, pick_q, questions, records
     rec, q = records[qid], questions[qid]
     _prev_a = labels.answer_labels(reviewer).get((run_id, qid), {})
     _prev_c = labels.chunk_labels(reviewer)
+    _prev_q = labels.chunk_quality(reviewer)
 
     def _esc(s):  # chunk text goes into a batch template: escape HTML and the template's braces
         return html.escape(s).replace("{", "{{").replace("}", "}}").replace("\n", "<br>")
@@ -140,11 +142,17 @@ def _(BEHAVIOURAL, KIND_TH, chunks, html, labels, mo, pick_q, questions, records
         _cited = "✓ อ้างอิงในคำตอบ" if _h["chunk_id"] in rec["cited"] else ""
         _meta = f"{KIND_TH.get(_c.get('kind'), _c.get('kind', '?'))} · {year_label(_c) if _c else '?'} · {_h['chunk_id']} {_cited}"
         _elements[f"c{_n}"] = _radio(labels.RELEVANCE, _prev_c.get((qid, _h["chunk_id"]), {}).get("relevance"))
+        _flag = _prev_q.get(_h["chunk_id"], {})  # per chunk, so a flag made on another question shows here too
+        _issue_opts = {f"{t}: {d}": t for t, d in labels.CHUNK_ISSUES.items()}
+        _elements[f"i{_n}"] = mo.ui.multiselect(_issue_opts, value=[k for k, t in _issue_opts.items() if t in _flag.get("issues", "").split(";")])
+        _elements[f"n{_n}"] = mo.ui.text(value=_flag.get("note", ""), placeholder="หมายเหตุเรื่องชิ้นนี้", full_width=True)
+        _seen = f" · แจ้งไว้ตอนตรวจ {_flag['question_id']}" if _flag and _flag["question_id"] != qid else ""
         _blocks.append(
             f"<details {'open' if _n <= 2 else ''}><summary><b>[{_n}] {_esc(_c.get('header', '(chunk missing)'))}</b>"
             f"<br><small>{_esc(_meta)}</small></summary><div style='font-size:0.9em;margin:0.5em 0'>{_esc(_c.get('text', ''))}</div>"
             f"<small><a href='{html.escape(_c.get('url', ''))}' target='_blank'>{html.escape(_c.get('url', ''))}</a></small></details>"
-            f"<div>ความเกี่ยวข้องกับคำถาม: {{c{_n}}}</div><hr>"
+            f"<div>ความเกี่ยวข้องกับคำถาม: {{c{_n}}}</div>"
+            f"<div><small>ปัญหาของชิ้นนี้ (ไม่บังคับ ไม่เกี่ยวกับคะแนน ใช้กับทุกคำถามที่ดึงชิ้นนี้มา{_esc(_seen)})</small> {{i{_n}}} {{n{_n}}}</div><hr>"
         )
     for _f, _desc in labels.RUBRIC.items():
         _elements[_f] = _radio(labels.SCORES, _prev_a.get(_f))
@@ -200,7 +208,8 @@ def _(form, hits, labels, mo, qid, reviewer, run_id, set_saved):
     _answer = dict(grounded=_v["grounded"] or "", correct=_v["correct"] or "", useful=_v["useful"] or "",
                    behaviour=_v.get("behaviour", "na") or "", tags=";".join(_v["tags"]), note=_v["note"].strip())
     _chunks = {h["chunk_id"]: dict(relevance=_v[f"c{i}"] or "") for i, h in enumerate(hits, 1)}
-    labels.save(reviewer, run_id, qid, _answer, _chunks)
+    _issues = {h["chunk_id"]: dict(issues=";".join(_v[f"i{i}"]), note=_v[f"n{i}"].strip()) for i, h in enumerate(hits, 1)}
+    labels.save(reviewer, run_id, qid, _answer, _chunks, _issues)
     set_saved(lambda n: n + 1)
     mo.callout(f"บันทึก {qid} แล้ว" + (f" (ยังไม่ครบ: {', '.join(_missing)}; ข้อนี้จะยังอยู่ในคิว)" if _missing else ""),
                kind="warn" if _missing else "success")
