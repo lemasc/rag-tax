@@ -35,10 +35,10 @@ from rag import llm
 from rag.answer import source_block
 from rag.chunk import OUT, read_jsonl
 from rag.index import DEFAULT_MODEL, embed, load_model
-from rag.labels import RUNS, TAGS, answer_labels, chunk_labels, is_complete, reviewers, runs
+from rag.labels import REFUSAL_RULE, RUNS, TAGS, answer_labels, chunk_labels, is_complete, reviewers, runs
 from rag.questions import BEHAVIOURAL
 
-JUDGE_VERSION = "v1"
+JUDGE_VERSION = "v2"  # v2: behaviour only on behavioural questions, refusal rule, ignored_source tag
 JUDGE_PROFILE = "judge"
 RELEVANCE_N = 3
 WORKERS = 4
@@ -78,11 +78,12 @@ RUBRIC_SYSTEM = f"""คุณเป็นผู้ตรวจคำตอบข
 - correct (ถูกต้อง): 2 = ถูกต้องสำหรับปีภาษีปัจจุบัน รวมตัวเลขและเงื่อนไข | 1 = หลักถูกแต่ตัวเลขเก่า ขาดเงื่อนไข หรือไม่ระบุปีในจุดที่สำคัญ | 0 = ผิด หรือทำให้ผู้เสียภาษีเข้าใจผิด
 - useful (ตอบตรง): 2 = ตอบคำถามตามที่ถาม | 1 = ตอบบางส่วน หรือซ่อนคำตอบ | 0 = ไม่ตอบ
 คำตอบที่ตรงกับเอกสารแต่เอกสารล้าสมัยได้ grounded = 2 แต่ correct ต่ำ ให้ให้คะแนนสองข้อนี้แยกกัน
+{REFUSAL_RULE}
 
 behaviour (ระบบทำสิ่งที่ประเภทคำถามต้องการหรือไม่):
-- "na" = คำถามไม่ต้องการพฤติกรรมพิเศษ (คำถามทั่วไปส่วนใหญ่)
-- "yes" = ถามกลับเมื่อข้อมูลไม่ครบ / แก้ความเข้าใจผิด / บอกว่าเอกสารไม่ครอบคลุม ตามที่คำถามต้องการ
-- "no" = ควรทำแล้วไม่ทำ หรือทำทั้งที่ไม่ควร
+- "na" = คำถามทั่วไปและคำถามหลายรอบ เสมอ (การปฏิเสธที่ไม่จำเป็นให้สะท้อนใน useful และแท็ก needless_refusal)
+- "yes" = คำถามที่ควรถามกลับ ถามกลับ / คำถามที่เข้าใจผิด ชี้แจงให้ถูก / คำถามนอกขอบเขต บอกว่าเอกสารไม่ครอบคลุมโดยไม่ตอบผิด ๆ
+- "no" = คำถามประเภทนั้นแต่ไม่ได้ทำตามข้างบน
 
 แท็กความล้มเหลว (เลือกได้หลายข้อ หรือไม่เลือกเลย):
 {chr(10).join(f"- {k}: {v}" for k, v in TAGS.items())}
@@ -184,7 +185,10 @@ def check_rubric(n_sources: int) -> Callable[[dict], dict]:
 
 def rubric(ask: Ask, rec: dict, context: str) -> tuple[dict, list]:
     user = f"{context}\n\nประเภทคำถาม: {KIND_NOTE[rec['kind']]}\nคำถาม: {rec['question']}\n\nคำตอบที่ต้องให้คะแนน\n{rec['answer']}"
-    return ask(_msgs(RUBRIC_SYSTEM, user), check_rubric(len(rec["hits"])))
+    got, replies = ask(_msgs(RUBRIC_SYSTEM, user), check_rubric(len(rec["hits"])))
+    if rec["kind"] not in BEHAVIOURAL:  # the rubric fixes it; do not trust the judge to follow that
+        got["behaviour"] = "na"
+    return got, replies
 
 
 # ---------------------------------------------------------------- scoring a run
@@ -353,7 +357,8 @@ def compare(path: Path, scores: list[dict]) -> dict[str, dict]:
                 continue
             rub = by_q[q]["rubric"]
             for f in ("grounded", "correct", "useful", "behaviour"):
-                pairs[f].append((str(rub[f]), lab[f]))
+                if f != "behaviour" or by_q[q]["kind"] in BEHAVIOURAL:  # behaviour is "na" on the rest
+                    pairs[f].append((str(rub[f]), lab[f]))
             for n, cid in enumerate(chunk_ids[q], 1):
                 if (q, cid) in cl:
                     pairs["relevance"].append((str(rub["relevance"][str(n)]), cl[(q, cid)]["relevance"]))

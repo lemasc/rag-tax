@@ -1,6 +1,6 @@
 # Human review rubric
 
-Status: draft 2026-10-21, to be agreed before the shared set is labelled. The values and tags live in `rag/labels.py`; keep the two in step. The LLM judge (plan step 5) will use the same rubric, so these labels double as its validation sample.
+Status: v2, 2026-10-21. v1 (the draft) left `behaviour` undefined on normal questions and did not say how to score a refusal; shared-set agreement on `behaviour` was 31% (see *Changes from v1*). Re-label the shared set under v2. The values and tags live in `rag/labels.py`; keep the two in step. The LLM judge (plan step 5) will use the same rubric, so these labels double as its validation sample.
 
 ## How the review is organised
 
@@ -38,13 +38,20 @@ Score against the retrieved sources and your own knowledge of current PIT law. P
 | **correct** (ถูกต้อง) | Correct for the current tax year as far as you know, figures and conditions included | Right rule, but an old figure, a missing condition, or a year not stated where it matters | Wrong, or would mislead a taxpayer |
 | **useful** (ตอบตรง) | Answers the question as asked | Partly answers, or buries the answer | Does not answer |
 
-**behaviour** (did it do what the question type needs):
+**Refusals.** When the answer declines, asks back, or says the sources do not cover the question, score it like any other answer:
 
-| Value | When |
-|---|---|
-| ไม่เกี่ยว (na) | The question needs no special behaviour (most normal questions) |
-| ทำถูก (yes) | Asked for missing facts, corrected a wrong premise, or said the sources do not cover it, when the question called for it |
-| ไม่ทำ / ทำผิด (no) | Should have done one of these and did not, or did one when it should not have |
+- **grounded** and **correct** judge what the answer actually says. "The sources do not cover this", when they do not, is not a wrong statement.
+- **useful** carries the failure: 0 if nothing is answered, 1 if some substance is given.
+- Tag `retrieval_miss` when no retrieved source could answer it, or `needless_refusal` when one could.
+- Exception: on ask-back and out-of-scope questions, asking back or saying the sources do not cover it *is* the wanted answer; score **useful** as usual.
+
+**behaviour** is scored **only on behavioural questions** (ask-back, misconception, out of scope). On normal and multi-turn questions it is `na` and the notebook does not show it; a needless refusal there shows up in **useful** and the `needless_refusal` tag, not in behaviour.
+
+| Question type | ทำถูก (yes) | ไม่ทำ / ทำผิด (no) |
+|---|---|---|
+| ask-back | Asks for the missing facts (it may also give the general rule) | Answers as if the facts were known, or asks for the wrong thing |
+| misconception | Corrects the wrong premise | Goes along with it |
+| out of scope | Says the sources do not cover it, without giving a wrong answer | Answers anyway, or stretches a neighbouring rule to fit (e.g. a prize-draw rule for a government lottery win) |
 
 A grounded answer can still be incorrect: the corpus holds outdated material, and an answer faithful to a 2560 FAQ quotes a 2560 limit. Score both items separately; that difference is one of the things the evaluation is meant to show.
 
@@ -52,9 +59,10 @@ A grounded answer can still be incorrect: the corpus holds outdated material, an
 
 | Tag | Meaning |
 |---|---|
-| retrieval_miss | The right document was not retrieved (say which in the note if you know it) |
+| retrieval_miss | No retrieved source can answer the question (no chunk rated 2); say which document was needed in the note if you know it |
+| ignored_source | A retrieved source had what was needed, but the answer left it out or used only part of it |
 | one_doc | One document filled most or all of the slots |
-| outdated | Uses an old year's figure or rule |
+| outdated | The answer uses an old year's figure or rule. Old sources that were retrieved but not used do not count |
 | misread | Misread a source or used it out of context (e.g. a ภ.ง.ด.94 half-year amount presented as an annual one) |
 | unsupported | States something not in any source |
 | calc_error | Arithmetic or tax calculation wrong |
@@ -62,3 +70,13 @@ A grounded answer can still be incorrect: the corpus holds outdated material, an
 | bad_citation | The cited source does not say what the sentence says |
 | language | Unnatural or hard-to-read Thai |
 | other | Anything else; describe it in the note |
+
+## Changes from v1
+
+The first labels (run `20261020-dev-gpt-mini-hybrid-k5-v1`, three reviewers) showed:
+
+- `behaviour` on normal questions was read three ways: "the answer was good" (`yes` on nearly everything), "not applicable" (`na`), and "the model refused" (`yes` or `no`). It is now fixed to `na` there.
+- A refusal on a normal question got `correct=0` from one reviewer ("it fails the taxpayer") and `correct=2` from another ("it says nothing false"). The refusal rule settles it: correct judges the statements, useful judges whether the question was answered.
+- `retrieval_miss` was used for "retrieved but not used"; that is now `ignored_source`. `outdated` was used for old sources that the answer did not use.
+
+Old labels are kept as they are; agreement and the judge comparison now ignore `behaviour` outside behavioural questions. The judge prompt follows this version as v2.

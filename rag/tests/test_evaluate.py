@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from rag.evaluate import (agree, check_rubric, check_verdicts, conversation, faithfulness, human_gap, make_ask, relevance,
+from rag.evaluate import (agree, check_rubric, check_verdicts, conversation, faithfulness, human_gap, make_ask, relevance, rubric,
                           summarise)
 
 
@@ -58,6 +58,14 @@ def test_rubric_check_keeps_known_tags_and_requires_every_source():
         with pytest.raises(ValueError):
             check_rubric(2)(bad)
 
+
+
+def test_rubric_behaviour_is_na_outside_behavioural_questions():
+    rec = dict(kind="normal", question="q", answer="a", hits=[{}, {}])
+    got, _ = rubric(scripted(GOOD | {"behaviour": "yes"}), rec, "ctx")
+    assert got["behaviour"] == "na"
+    got, _ = rubric(scripted(GOOD | {"behaviour": "no"}), rec | {"kind": "ask_back"}, "ctx")
+    assert got["behaviour"] == "no"
 
 def test_ask_retries_once_without_the_cache(monkeypatch):
     calls = []

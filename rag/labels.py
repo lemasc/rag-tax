@@ -24,7 +24,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from rag.questions import Question, dev, load
+from rag.questions import BEHAVIOURAL, Question, dev, load
 
 ROOT = Path(__file__).parent.parent
 LABELS = ROOT / "rag" / "eval" / "labels"
@@ -41,16 +41,24 @@ RUBRIC = {
     "correct": "ถูกต้องตามกฎหมายปัจจุบันเท่าที่ผู้ตรวจทราบ รวมถึงตัวเลขและปีภาษี",
     "useful": "ตอบตรงคำถามและนำไปใช้ได้จริง",
 }
-BEHAVIOUR = {"na": "ไม่เกี่ยว", "yes": "ทำถูก", "no": "ไม่ทำ / ทำผิด"}  # asked back, corrected, declined as needed
+# behaviour is scored only on behavioural questions (asked back, corrected, declined as needed); "na" everywhere else
+BEHAVIOUR = {"yes": "ทำถูก", "no": "ไม่ทำ / ทำผิด"}
+REFUSAL_RULE = (
+    "ถ้าคำตอบปฏิเสธ ถามกลับ หรือบอกว่าเอกสารไม่ครอบคลุม: grounded และ correct ตัดสินจากสิ่งที่คำตอบพูดจริง "
+    "(บอกว่าเอกสารไม่ครอบคลุมเมื่อไม่ครอบคลุมจริง ถือว่าไม่ผิด) ส่วน useful ให้ 0 ถ้าไม่ได้ตอบเลย 1 ถ้าให้สาระบางส่วน "
+    "แล้วติดแท็ก retrieval_miss (ไม่มีเอกสารที่ดึงมาตอบได้) หรือ needless_refusal (เอกสารที่ดึงมาตอบได้อยู่แล้ว) "
+    "ยกเว้นคำถามที่ควรถามกลับหรืออยู่นอกขอบเขต: ถามกลับหรือบอกว่าไม่ครอบคลุมคือคำตอบที่ต้องการ ให้ useful ตามปกติ"
+)
 RELEVANCE = {"2": "2 ตอบได้", "1": "1 เกี่ยวข้อง", "0": "0 ไม่เกี่ยว"}
 TAGS = {
-    "retrieval_miss": "ไม่ได้ดึงเอกสารที่ควรได้",
+    "retrieval_miss": "ไม่มีเอกสารที่ดึงมาตอบคำถามได้ (ไม่มีเอกสารที่ได้ความเกี่ยวข้อง 2)",
+    "ignored_source": "เอกสารที่ดึงมามีคำตอบ แต่คำตอบไม่ได้ใช้หรือใช้ไม่ครบ",
     "one_doc": "เอกสารเดียวกินทุกช่อง",
-    "outdated": "ใช้ข้อมูลปีเก่า",
+    "outdated": "คำตอบใช้ตัวเลขหรือกฎของปีเก่า (ดึงเอกสารเก่ามาแต่ไม่ได้ใช้ ไม่ต้องติด)",
     "misread": "อ่านเอกสารผิด / ผสมข้อมูลผิดบริบท",
     "unsupported": "แต่งข้อมูลที่ไม่มีในเอกสาร",
     "calc_error": "คำนวณผิด",
-    "needless_refusal": "ปฏิเสธ/ถามกลับโดยไม่จำเป็น",
+    "needless_refusal": "ปฏิเสธ/ถามกลับ ทั้งที่เอกสารที่ดึงมาตอบได้",
     "bad_citation": "อ้างอิงผิดเอกสาร",
     "language": "ภาษาไม่เป็นธรรมชาติ / อ่านยาก",
     "other": "อื่น ๆ (เขียนในหมายเหตุ)",
@@ -168,15 +176,18 @@ def queue(reviewer: str, run_id: str, question_ids: list[str], shared: list[str]
 
 def agreement(run_id: str, question_ids: list[str]) -> dict[str, tuple[int, float]]:
     """Exact agreement between reviewers on the given questions: field -> (number of reviewer pairs compared,
-    share of pairs with the same value). Chunk relevance is compared per (question, chunk)."""
+    share of pairs with the same value). Behaviour is compared on behavioural questions only (it is "na" on the
+    rest); chunk relevance is compared per (question, chunk)."""
     from itertools import combinations
 
     revs = reviewers()
     ans = {r: answer_labels(r) for r in revs}
+    kind = {q.id: q.kind for q in load()}
     out = {}
     for f in ("grounded", "correct", "useful", "behaviour"):
+        qs = [q for q in question_ids if f != "behaviour" or kind.get(q) in BEHAVIOURAL]
         pairs = [(ans[a].get((run_id, q), {}).get(f), ans[b].get((run_id, q), {}).get(f))
-                 for q in question_ids for a, b in combinations(revs, 2)]
+                 for q in qs for a, b in combinations(revs, 2)]
         pairs = [(x, y) for x, y in pairs if x and y]
         out[f] = (len(pairs), sum(x == y for x, y in pairs) / len(pairs) if pairs else float("nan"))
     ch = {r: chunk_labels(r) for r in revs}

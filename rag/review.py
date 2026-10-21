@@ -22,9 +22,9 @@ def _():
     sys.path.insert(0, str(ROOT))  # `marimo run` does not put the repo root on the path
     from rag import labels
     from rag.answer import KIND_TH, year_label
-    from rag.questions import load
+    from rag.questions import BEHAVIOURAL, load
 
-    return KIND_TH, ROOT, html, json, labels, load, mo, year_label
+    return BEHAVIOURAL, KIND_TH, ROOT, html, json, labels, load, mo, year_label
 
 
 @app.cell
@@ -108,7 +108,7 @@ def _(items, mo, questions, show_all, todo):
 
 
 @app.cell
-def _(KIND_TH, chunks, html, labels, mo, pick_q, questions, records, reviewer, run_id, year_label):
+def _(BEHAVIOURAL, KIND_TH, chunks, html, labels, mo, pick_q, questions, records, reviewer, run_id, year_label):
     mo.stop(not pick_q.value)
     qid = pick_q.value
     rec, q = records[qid], questions[qid]
@@ -134,18 +134,21 @@ def _(KIND_TH, chunks, html, labels, mo, pick_q, questions, records, reviewer, r
             f"<small><a href='{html.escape(_c.get('url', ''))}' target='_blank'>{html.escape(_c.get('url', ''))}</a></small></details>"
             f"<div>ความเกี่ยวข้องกับคำถาม: {{c{_n}}}</div><hr>"
         )
-    _default_behaviour = _prev_a.get("behaviour") or ("na" if q.kind in ("normal", "multi_turn") else None)
     for _f, _desc in labels.RUBRIC.items():
         _elements[_f] = _radio(labels.SCORES, _prev_a.get(_f))
-    _elements["behaviour"] = _radio(labels.BEHAVIOUR, _default_behaviour)
+    if q.kind in BEHAVIOURAL:  # elsewhere behaviour is saved as "na" without asking
+        _elements["behaviour"] = _radio(labels.BEHAVIOUR, _prev_a.get("behaviour"))
     _tag_opts = {f"{t}: {d}": t for t, d in labels.TAGS.items()}
     _elements["tags"] = mo.ui.multiselect(_tag_opts, value=[k for k, t in _tag_opts.items() if t in _prev_a.get("tags", "").split(";")])
     _elements["note"] = mo.ui.text_area(value=_prev_a.get("note", ""), full_width=True)
     _rubric = "".join(f"<p><b>{_f}</b>: {_esc(_d)}<br>{{{_f}}}</p>" for _f, _d in labels.RUBRIC.items())
+    _behaviour = {"ask_back": "ถามกลับเพื่อขอข้อมูลที่ขาดหรือไม่", "misconception": "ชี้แจงความเข้าใจผิดในคำถามหรือไม่",
+                  "out_of_scope": "บอกว่าเรื่องนี้อยู่นอกขอบเขตเอกสารหรือไม่ โดยไม่ตอบผิด ๆ"}.get(q.kind)
     _template = (
         "<h3>แหล่งอ้างอิงที่ดึงมา</h3>" + "".join(_blocks)
         + "<h3>ให้คะแนนคำตอบ</h3>" + _rubric
-        + "<p><b>behaviour</b>: ถามกลับ / แก้ความเข้าใจผิด / ปฏิเสธ เมื่อคำถามต้องการ<br>{behaviour}</p>"
+        + f"<p><small>{_esc(labels.REFUSAL_RULE)}</small></p>"
+        + (f"<p><b>behaviour</b>: {_behaviour}<br>{{behaviour}}</p>" if _behaviour else "")
         + "<p><b>tags</b><br>{tags}</p><p><b>หมายเหตุ</b><br>{note}</p>"
     )
     form = mo.ui.batch(mo.Html(_template), _elements).form(submit_button_label="บันทึก (Save)", bordered=True)
@@ -180,10 +183,10 @@ def _(form):
 def _(form, hits, labels, mo, qid, reviewer, run_id, set_saved):
     mo.stop(form.value is None)
     _v = form.value
-    _missing = [k for k in ("grounded", "correct", "useful", "behaviour") if not _v[k]]
+    _missing = [k for k in ("grounded", "correct", "useful", "behaviour") if k in _v and not _v[k]]
     _missing += [f"chunk {i}" for i in range(1, len(hits) + 1) if not _v[f"c{i}"]]
     _answer = dict(grounded=_v["grounded"] or "", correct=_v["correct"] or "", useful=_v["useful"] or "",
-                   behaviour=_v["behaviour"] or "", tags=";".join(_v["tags"]), note=_v["note"].strip())
+                   behaviour=_v.get("behaviour", "na") or "", tags=";".join(_v["tags"]), note=_v["note"].strip())
     _chunks = {h["chunk_id"]: dict(relevance=_v[f"c{i}"] or "") for i, h in enumerate(hits, 1)}
     labels.save(reviewer, run_id, qid, _answer, _chunks)
     set_saved(lambda n: n + 1)

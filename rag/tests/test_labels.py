@@ -76,3 +76,14 @@ def test_agreement_counts_pairs_on_the_given_questions():
     labels.save("bob", "r", "Q9", FULL, {})
     agr = labels.agreement("r", ["Q1"])
     assert agr["grounded"] == (1, 1.0) and agr["correct"] == (1, 0.0) and agr["relevance"] == (1, 1.0)
+
+
+def test_agreement_compares_behaviour_on_behavioural_questions_only():
+    kinds = {q.kind: q.id for q in load()}
+    normal, ask_back = kinds["normal"], kinds["ask_back"]
+    labels.save("ann", "r", normal, FULL | {"behaviour": "yes"}, {})
+    labels.save("bob", "r", normal, FULL | {"behaviour": "no"}, {})
+    assert labels.agreement("r", [normal])["behaviour"][0] == 0
+    labels.save("ann", "r", ask_back, FULL | {"behaviour": "yes"}, {})
+    labels.save("bob", "r", ask_back, FULL | {"behaviour": "yes"}, {})
+    assert labels.agreement("r", [normal, ask_back])["behaviour"] == (1, 1.0)
