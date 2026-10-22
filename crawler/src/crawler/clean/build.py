@@ -4,14 +4,16 @@ Input : data/pages.jsonl, data/legal_core.csv, data/legal_text.csv, data/text/le
         data/legal_catalog.csv + data/text/guide/*.md (the คู่มือกรอกแบบ filling guides),
         data/image_decisions.csv + data/text/image/*.md (images decided keep become documents, source "image"),
         data/legal_scope.csv (hand-labelled PIT scope, optional; see docs/plans/pit-scope.md),
-        data/unit_decisions.csv (hand-recorded duplicate drops; a dropped document or unit gets include=false and duplicate_of)
-Output: data/clean/documents.jsonl  (doc_id, source, kind, role, include, title, text, flags, pages, ...)
+        data/unit_decisions.csv (hand-recorded duplicate drops; a dropped document or unit gets include=false and duplicate_of),
+        data/legal_relations.csv (which instrument amends or repeals which, checked by hand from crawler.legal_relations)
+Output: data/clean/documents.jsonl  (doc_id, source, kind, role, include, title, text, flags, pages, amends, amended_by, ...)
         `pages` is [[pdf page, start offset in text], ...] for OCR documents, else null (see clean/pages.py)
         data/clean/units.jsonl      (unit_id, doc_id, type, label, text, section, title, flags, notes, include, duplicate_of)
 Run   : uv run python -m crawler.clean.build
 """
 
 import csv
+import hashlib
 import json
 import re
 from collections import Counter
@@ -160,10 +162,15 @@ def image_docs() -> list[dict]:
     return docs
 
 
+def text_hash(text: str) -> str:
+    """Short hash of a record's text with whitespace collapsed, recorded with a decision so it can be checked later."""
+    return hashlib.sha1(" ".join(text.split()).encode()).hexdigest()[:12]
+
+
 def apply_decisions(docs: list[dict], units: list[dict], decisions: list[dict]) -> None:
     """Mark dropped documents and units include=false with what they duplicate. Every decision must name an existing
-    record: unit ids are positional (`62149#025`), so a splitter change that moves them fails here instead of silently
-    dropping the wrong unit."""
+    record, and one with a `text_hash` a record with that text: unit ids are positional (`62149#025`), so a splitter or
+    cleaning change that moves an id onto other text fails here instead of silently dropping the wrong unit."""
     for u in units:
         u["include"], u["duplicate_of"] = True, None
     by_level = {"doc": {d["doc_id"]: d for d in docs}, "unit": {u["unit_id"]: u for u in units}}
@@ -173,7 +180,30 @@ def apply_decisions(docs: list[dict], units: list[dict], decisions: list[dict]) 
         rec = by_level[r["level"]].get(r["id"])
         if rec is None:
             raise SystemExit(f"unit_decisions.csv: no {r['level']} {r['id']!r} in the built corpus")
+        if r.get("text_hash") and text_hash(rec["text"]) != r["text_hash"]:
+            raise SystemExit(f"unit_decisions.csv: the text of {r['level']} {r['id']!r} changed since the decision; check it again")
         rec["include"], rec["duplicate_of"] = False, r["duplicate_of"] or None
+
+
+def apply_relations(docs: list[dict], units: list[dict], relations: list[dict]) -> None:
+    """Record on each instrument what it amends or repeals (`amends`) and, on a target the corpus carries, who amended or
+    repealed it (`amended_by`, plus an `amended`/`repealed` flag the chunks carry). Old instruments stay in the corpus: a
+    question can be about an earlier year, and the generator can see that a text is no longer in force."""
+    by_id = {d["doc_id"]: d for d in docs}
+    unit_ids = {u["unit_id"] for u in units}
+    for d in docs:
+        d["amends"], d["amended_by"] = None, None
+    for r in relations:
+        src, tgt = by_id.get(r["doc_id"]), by_id.get(r["target_doc_id"]) if r["target_doc_id"] else None
+        if src is None or r["unit_id"] not in unit_ids or (r["target_doc_id"] and tgt is None):
+            raise SystemExit(f"legal_relations.csv: {r['doc_id']} {r['unit_id']} -> {r['target_doc_id']!r} not in the built corpus")
+        src["amends"] = (src["amends"] or []) + [dict(relation=r["relation"], target=f"{r['target_kind']} {r['target_number']}",
+                                                     target_doc_id=r["target_doc_id"] or None, scope=r["scope"] or None)]
+        if tgt is not None:
+            tgt["amended_by"] = (tgt["amended_by"] or []) + [dict(doc_id=src["doc_id"], relation=r["relation"], year=src["year"], scope=r["scope"] or None)]
+            flag = "repealed" if r["relation"] == "repeals" else "amended"
+            if flag not in tgt["flags"]:
+                tgt["flags"].append(flag)
 
 
 def main() -> None:
@@ -189,6 +219,9 @@ def main() -> None:
     decisions_path = DATA / "unit_decisions.csv"
     if decisions_path.exists():
         apply_decisions(docs, units, list(csv.DictReader(decisions_path.open(encoding="utf-8"))))
+    relations_path = DATA / "legal_relations.csv"
+    if relations_path.exists():
+        apply_relations(docs, units, list(csv.DictReader(relations_path.open(encoding="utf-8"))))
     for name, rows in (("documents", docs), ("units", units)):
         with (OUT / f"{name}.jsonl").open("w", encoding="utf-8") as f:
             f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
