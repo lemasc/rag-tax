@@ -6,7 +6,7 @@ lead-in followed by a paragraph, or a numbered item in plain type, becomes a hea
 text on the same PDF page (matched on Thai consonants and digits only, which survive the damage) and measures how much
 of it is bold. Headings with little bold are candidates to demote to plain text (data/guide_heading_decisions.csv).
 
-Input : data/raw/pit2568/*.pdf, data/raw/pit2568/ocr/<stem>.md   (neither is checked in)
+Input : data/raw/pit2568/*.pdf (not checked in), data/text/guide/<stem>.md
 Output: data/guide_heading_audit.csv  (stem, page, kind, length, bold_frac, text); bold_frac is empty when the text was
         not found on the page (a table cell, a short or Latin-only heading)
 Run   : uv run python -m crawler.guide_headings
@@ -83,7 +83,7 @@ def audit(stem: str) -> list[dict]:
         subprocess.run(["pdftohtml", "-xml", "-i", "-q", "-nodrm", str(RAW / f"{stem}.pdf"), f"{tmp}/{stem}"], check=True)
         pages = pdf_pages(Path(f"{tmp}/{stem}.xml").read_text(encoding="utf-8"))
     rows = []
-    for page, kind, text in ocr_headings((RAW / "ocr" / f"{stem}.md").read_text(encoding="utf-8")):
+    for page, kind, text in ocr_headings((DATA / "text" / "guide" / f"{stem}.md").read_text(encoding="utf-8")):
         b = bold_fraction(text, pages[page]) if page in pages else None
         rows.append(dict(stem=stem, page=page, kind=kind, length=len(text), bold_frac="" if b is None else f"{b:.2f}", text=text))
     return rows

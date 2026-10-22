@@ -1,6 +1,7 @@
 """Build the clean corpus: one record per document, plus structural units for statute and FAQ documents.
 
 Input : data/pages.jsonl, data/legal_core.csv, data/legal_text.csv, data/text/legal/*.md,
+        data/legal_catalog.csv + data/text/guide/*.md (the คู่มือกรอกแบบ filling guides),
         data/image_decisions.csv + data/text/image/*.md (images decided keep become documents, source "image"),
         data/legal_scope.csv (hand-labelled PIT scope, optional; see docs/plans/pit-scope.md),
         data/unit_decisions.csv (hand-recorded duplicate drops; a dropped document or unit gets include=false and duplicate_of)
@@ -26,10 +27,10 @@ from crawler.clean.units import split_faq, split_guide, split_instrument, split_
 
 DATA = Path("data")
 OUT = DATA / "clean"
-# Typhoon OCR of the 2568 filling guides (`~/san/ocr/typhoon_ocr_file.py`), cached next to the PDFs; data/raw is not
-# checked in, the cleaned text in data/clean is.
+# Typhoon OCR of the 2568 filling guides (`~/san/ocr/typhoon_ocr_file.py`), copied from the cache next to the PDFs
+# (data/raw/pit2568/ocr, not checked in) so a fresh clone can build, like data/text/image.
 GUIDE_KIND = "คู่มือกรอกแบบ"
-GUIDE_OCR = DATA / "raw" / "pit2568" / "ocr"
+GUIDE_OCR = DATA / "text" / "guide"
 GUIDE_HEADINGS = DATA / "guide_heading_decisions.csv"  # keep/demote per OCR heading, from crawler.guide_headings
 PAGE_HEADINGS = DATA / "page_headings.csv"  # page_id, heading, before, source, note: headings that are pictures on the page (63437)
 GUIDE_OVERRIDES = DATA / "guide_overrides"  # <stem>/page-NN.md: hand-corrected text for a page the OCR misreads (checked in)
@@ -107,7 +108,7 @@ def legal_docs() -> tuple[list[dict], list[dict]]:
 
 
 def guide_docs() -> tuple[list[dict], list[dict]]:
-    """One document per `legal_catalog.csv` row of kind คู่มือกรอกแบบ, from its OCR in data/raw/pit2568/ocr (not in data/text/legal:
+    """One document per `legal_catalog.csv` row of kind คู่มือกรอกแบบ, from its OCR in data/text/guide (not in data/text/legal:
     these guides were OCR'd outside the crawler flow and are not cited by the Code, so legal_core never sees them)."""
     docs, units = [], []
     heading_rows = list(csv.DictReader(GUIDE_HEADINGS.open(encoding="utf-8")))

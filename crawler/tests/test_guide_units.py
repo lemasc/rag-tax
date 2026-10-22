@@ -74,9 +74,7 @@ def test_a_long_section_without_a_number_in_its_label_stays_whole():
 
 @pytest.mark.parametrize("stem", ["Ins90_241268", "Ins91_241268", "Ins94_050668"])
 def test_real_guides_lose_no_text(stem):
-    path = DATA / "raw" / "pit2568" / "ocr" / f"{stem}.md"
-    if not path.exists():
-        pytest.skip("OCR cache not available (data/raw is not checked in)")
+    path = DATA / "text" / "guide" / f"{stem}.md"
     from crawler.clean.build import drop_empty_cells, normalize, rejoin, take_page_anchors
     text, _ = take_page_anchors(rejoin(drop_empty_cells(normalize(path.read_text(encoding="utf-8"))))[0])
     pre, units = split_guide(stem, text)
