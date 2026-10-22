@@ -96,6 +96,14 @@ Status: started 2026-10-17. Tracks details that did not resolve while building `
 
 **General rule (2026-10-18):** images that defeat OCR are corrected by hand, not by tuning OCR; `source = manual` files are never overwritten by `images.export_kept`, and `verified` says whether a person has compared text and image.
 
+### 12. Markdown tables that trafilatura wrote on web pages were never reviewed
+
+**State:** not checked, not fixed. trafilatura converted the HTML tables of the web pages to markdown rows (`| แนววินิจฉัย | ... |` in the rulings, the summary tables of `59674`, `60579` and `59668`) and nobody compared them with the pages. The OCR tables of the guides and images are different: each of those now has an explicit decision in `crawler/data/table_decisions.csv` (convert, manual or keep; `clean/tables.py`), because a blanket conversion would mangle colspan/rowspan tables without notice. Web pages have no such list.
+
+**What is known** (built corpus, `source = page`): 32 documents have lines that start with `|`, 342 lines in about 39 tables, all of them included documents: 19 articles, 10 rulings, 2 FAQ pages and the index page `67335`. The longest are `6052` (48 lines), `59674` (28), `67335` (28), `5938` (28), `59668` (27), `67032` (22) and `62149` (21); `60579` has 14. Whether a table lost a merged cell, a header row or a cell's line breaks in the conversion is not known; the chunker now repeats a table's header row and separator when it cuts a table between rows, but only if the markdown has a header and separator line.
+
+**What would settle it:** list the 39 tables with their page, look each one up on rd.go.th, and give it the same decision as the OCR tables (fine as converted, hand-written, or fix the extraction).
+
 ### 10. Repo hygiene
 
 - `notebooks/.ipynb_checkpoints/` is untracked and not ignored.
