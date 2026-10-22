@@ -291,6 +291,12 @@ def run_dir(run_id: str | None) -> Path:
     return RUNS / run_id
 
 
+def out_dir(path: Path, judge_name: str) -> Path:
+    """Where a judge's scores go: the run folder for the project judge, runs/<id>/judges/<profile>/ for any other,
+    so scoring with a candidate never overwrites the fixed judge's scores."""
+    return path if judge_name == JUDGE_PROFILE else path / "judges" / judge_name
+
+
 def evaluate(path: Path, judge_name: str = JUDGE_PROFILE, limit: int | None = None) -> list[dict]:
     judge = llm.profile(judge_name)
     ask = make_ask(judge)
@@ -306,11 +312,13 @@ def evaluate(path: Path, judge_name: str = JUDGE_PROFILE, limit: int | None = No
     with ThreadPoolExecutor(WORKERS) as pool:
         scores = list(pool.map(lambda r: score_record(ask, embedder, r, chunks, by_id), todo))
 
-    with (path / "scores.jsonl").open("w", encoding="utf-8") as f:
+    out = out_dir(path, judge_name)
+    out.mkdir(parents=True, exist_ok=True)
+    with (out / "scores.jsonl").open("w", encoding="utf-8") as f:
         f.writelines(json.dumps(s, ensure_ascii=False) + "\n" for s in scores)
     summary = summarise(scores)
-    (path / "scores_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
-    (path / "scores_config.json").write_text(json.dumps(dict(
+    (out / "scores_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
+    (out / "scores_config.json").write_text(json.dumps(dict(
         run_id=path.name, scored=time.strftime("%Y-%m-%dT%H:%M:%S%z"), judge_version=JUDGE_VERSION,
         judge=dict(profile=judge.name, backend=judge.backend, model=judge.model, base_url=judge.base_url, params=judge.params),
         embed_model=embedder.model_name, relevance_n=RELEVANCE_N, current_tax_year=CURRENT_TAX_YEAR, n_scored=len(scores),
@@ -389,13 +397,14 @@ def main() -> None:
     a = ap.parse_args()
     path = run_dir(a.run)
     if a.compare:
-        scores = [json.loads(ln) for ln in (path / "scores.jsonl").read_text(encoding="utf-8").splitlines()]
+        scores = [json.loads(ln) for ln in (out_dir(path, a.judge) / "scores.jsonl").read_text(encoding="utf-8").splitlines()]
         print_compare(compare(path, scores))
         return
     scores = evaluate(path, a.judge, a.limit)
     print_summary(summarise(scores))
-    cfg = json.loads((path / "scores_config.json").read_text(encoding="utf-8"))
-    print(f"{len(scores)} answers scored by {cfg['judge']['model']} -> {path}/scores.jsonl "
+    out = out_dir(path, a.judge)
+    cfg = json.loads((out / "scores_config.json").read_text(encoding="utf-8"))
+    print(f"{len(scores)} answers scored by {cfg['judge']['model']} -> {out}/scores.jsonl "
           f"(new tokens {cfg['new_prompt_tokens']} in + {cfg['new_completion_tokens']} out)")
 
 

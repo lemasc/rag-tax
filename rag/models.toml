@@ -2,7 +2,7 @@
 # file is the record of what each name meant, so change a profile's model only by adding a new profile.
 #
 # Backend: base_url (or base_url_env) and key_env, the .env variable holding the API key. `rpm` throttles requests
-# per minute for rate-limited free APIs. `json_mode` says whether the backend accepts response_format=json_object.
+# per minute for rate-limited free APIs (a profile may set its own, per model). `json_mode` says whether the backend accepts response_format=json_object.
 # Profile: backend, model id as the backend names it, and `params` passed to chat.completions.create unchanged
 # (reasoning models reject temperature, so it is not set globally).
 #
@@ -50,3 +50,21 @@ params = { reasoning_effort = "medium" }  # reasoning models reject temperature
 backend = "openai"
 model = "gpt-6-luna"
 params = { reasoning_effort = "low" }
+
+# ---- candidate judges (2026-10-22), different families from the generators; compared with the human labels on the
+# dev run before one is chosen for the panel. Undated aliases: judge every variant of an experiment in one session.
+[models.judge-haiku]
+backend = "openrouter"
+model = "anthropic/claude-haiku-5.5"
+params = { temperature = 0 }
+
+[models.judge-gemini]
+backend = "openrouter"
+model = "google/gemini-3.8-flash"
+params = { temperature = 0 }
+rpm = 18  # a profile's rpm overrides its backend's; OpenRouter limits new accounts to 20/min on this model
+
+[models.judge-deepseek]
+backend = "openrouter"
+model = "deepseek/deepseek-v4.1-flash"
+params = { temperature = 0 }

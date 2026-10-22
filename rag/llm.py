@@ -77,7 +77,7 @@ def profile(name: str, config: dict | None = None) -> Profile:
         raise SystemExit(f"profile {name}: model id is empty in models.toml (list ids with `python -m rag.llm models {m['backend']}`)")
     base_url, key = backend_endpoint(m["backend"], b)
     return Profile(name=name, backend=m["backend"], model=m["model"], base_url=base_url, api_key=key,
-                   params=dict(m.get("params", {})), json_mode=b.get("json_mode", False), rpm=b.get("rpm"))
+                   params=dict(m.get("params", {})), json_mode=b.get("json_mode", False), rpm=m.get("rpm", b.get("rpm")))
 
 
 def cache_key(p: Profile, messages: list[dict], params: dict, json_out: bool) -> str:
@@ -100,10 +100,10 @@ def _complete(p: Profile, messages: list[dict], params: dict, json_out: bool) ->
         client = _clients[(p.base_url, p.api_key)] = OpenAI(base_url=p.base_url, api_key=p.api_key, max_retries=5, timeout=180)
     if p.rpm:  # simple spacing for rate-limited free APIs; the lock keeps parallel callers in line
         with _throttle:
-            wait = _last_call.get(p.backend, 0) + 60 / p.rpm - time.monotonic()
+            wait = _last_call.get(p.model, 0) + 60 / p.rpm - time.monotonic()
             if wait > 0:
                 time.sleep(wait)
-            _last_call[p.backend] = time.monotonic()
+            _last_call[p.model] = time.monotonic()
     extra = {"response_format": {"type": "json_object"}} if json_out and p.json_mode else {}
     r = client.chat.completions.create(model=p.model, messages=messages, **params, **extra)
     usage = r.usage.model_dump() if r.usage else {}
