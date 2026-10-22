@@ -33,6 +33,7 @@ import numpy as np
 
 from rag import llm
 from rag.answer import source_block
+from rag import chunk_version
 from rag.chunk import OUT, read_jsonl
 from rag.index import DEFAULT_MODEL, embed, load_model
 from rag.labels import REFUSAL_RULE, RUBRIC_VERSION, RUNS, TAGS, answer_labels, chunk_labels, is_complete, is_current, reviewers, runs
@@ -298,6 +299,7 @@ def out_dir(path: Path, judge_name: str) -> Path:
 
 
 def evaluate(path: Path, judge_name: str = JUDGE_PROFILE, limit: int | None = None) -> list[dict]:
+    chunk_version.require(chunk_version.run_sha(path), f"run {path.name}")  # the judge reads the retrieved chunks' text
     judge = llm.profile(judge_name)
     ask = make_ask(judge)
     embedder = Embedder()
@@ -305,9 +307,6 @@ def evaluate(path: Path, judge_name: str = JUDGE_PROFILE, limit: int | None = No
     by_id = {r["id"]: r for r in records}
     chunks = {c["chunk_id"]: c for c in read_jsonl(OUT / "chunks.jsonl")}
     todo = [r for r in records if r["in_subset"]][:limit]
-    missing = {h["chunk_id"] for r in todo for h in r["hits"]} - set(chunks)
-    if missing:
-        raise SystemExit(f"{len(missing)} retrieved chunks are not in chunks.jsonl (rebuilt since the run?): {sorted(missing)[:3]}")
 
     with ThreadPoolExecutor(WORKERS) as pool:
         scores = list(pool.map(lambda r: score_record(ask, embedder, r, chunks, by_id), todo))

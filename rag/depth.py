@@ -32,7 +32,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from rag import evaluate, labels, llm
+from rag import chunk_version, evaluate, labels, llm
 from rag.answer import source_block
 from rag.chunk import OUT as CHUNKS, read_jsonl
 from rag.panel import DEFAULT_PANEL, median
@@ -348,6 +348,8 @@ def main() -> None:
     ap.add_argument("--judges", nargs="+", default=DEFAULT_PANEL)
     a = ap.parse_args()
 
+    if not a.report:  # the pool is retrieved for the base run's questions, and the judges read chunk text
+        chunk_version.require(chunk_version.run_sha(labels.RUNS / BASE_RUN), f"the top-50 pool (base run {BASE_RUN})")
     records = {r["id"]: r for r in read_jsonl(labels.RUNS / BASE_RUN / "answers.jsonl")}
     chunks = {c["chunk_id"]: c for c in read_jsonl(CHUNKS / "chunks.jsonl")}
     pool_path = OUT / "pool.jsonl"

@@ -21,16 +21,16 @@ def _():
 
     ROOT = Path(__file__).parent.parent
     sys.path.insert(0, str(ROOT))  # `marimo run` does not put the repo root on the path
-    from rag import depth, labels
+    from rag import chunk_version, depth, labels
     from rag.answer import KIND_TH, year_label
     from rag.chunk import OUT, read_jsonl
     from rag.questions import load
 
-    return KIND_TH, OUT, depth, html, labels, load, mo, read_jsonl, year_label
+    return KIND_TH, OUT, chunk_version, depth, html, labels, load, mo, read_jsonl, year_label
 
 
 @app.cell
-def _(OUT, depth, labels, load, read_jsonl):
+def _(OUT, chunk_version, depth, labels, load, read_jsonl):
     _items = [i for i in read_jsonl(depth.OUT / "pool.jsonl") if i["group"] == "miss"]
     _per_judge = {j: read_jsonl(depth.OUT / "judgments" / f"{j}.jsonl") for j in depth.DEFAULT_PANEL}
     _panel = depth.panel_grades(_per_judge, strict=False)
@@ -38,9 +38,19 @@ def _(OUT, depth, labels, load, read_jsonl):
     cands1 = {i["id"]: depth.candidates(i["pool"], _panel[i["id"]]) for i in _items}
     cands2 = depth.round2_candidates(items)
     chunks = {c["chunk_id"]: c for c in read_jsonl(OUT / "chunks.jsonl")}
+    # the pool was retrieved for the base run: with other chunks it is shown for reading only, and nothing is saved
+    view_only = chunk_version.problem(chunk_version.run_sha(labels.RUNS / depth.BASE_RUN), f"the top-50 pool (base run {depth.BASE_RUN})")
+    _ids = {e["chunk_id"] for i in _items for e in i["pool"]} | {e["chunk_id"] for es in [*cands1.values(), *cands2.values()] for e in es}
+    chunks |= {c: chunk_version.placeholder(c) for c in _ids - set(chunks)}
     records = {r["id"]: r for r in read_jsonl(labels.RUNS / depth.BASE_RUN / "answers.jsonl")}
     questions = {q.id: q for q in load()}
-    return cands1, cands2, chunks, items, questions, records
+    return cands1, cands2, chunks, items, questions, records, view_only
+
+
+@app.cell
+def _(mo, view_only):
+    mo.callout(mo.md(f"**ดูได้อย่างเดียว บันทึกไม่ได้** (view only, nothing is saved)\n\n{view_only}"), kind="danger") if view_only else None
+    return
 
 
 @app.cell
@@ -346,8 +356,9 @@ def _(
 
 
 @app.cell
-def _(cands, cid, depth, every, form, mo, qid, reviewer, rnd, set_pos, set_saved):
+def _(cands, cid, depth, every, form, mo, qid, reviewer, rnd, set_pos, set_saved, view_only):
     mo.stop(form.value is None)
+    mo.stop(view_only is not None, mo.callout("ไม่ได้บันทึก: ชุดนี้สร้างจาก chunks คนละรุ่นกับที่มีอยู่ (ดูข้อความด้านบน)", kind="danger"))
     _v = form.value
     mo.stop(_v["rel"] is None, mo.callout("เลือกคะแนนก่อนบันทึก", kind="warn"))
     _first_time = (qid, cid) not in depth.human_grades([reviewer], rnd)

@@ -22,11 +22,11 @@ def _():
 
     ROOT = Path(__file__).parent.parent
     sys.path.insert(0, str(ROOT))
-    from rag import evaluate, labels
+    from rag import chunk_version, evaluate, labels
     from rag.answer import KIND_TH, year_label
     from rag.questions import load
 
-    return KIND_TH, ROOT, evaluate, html, json, labels, load, mo, year_label
+    return KIND_TH, ROOT, chunk_version, evaluate, html, json, labels, load, mo, year_label
 
 
 @app.cell
@@ -39,7 +39,7 @@ def _(labels, mo):
 
 
 @app.cell
-def _(ROOT, evaluate, json, labels, load, mo, pick_run, refresh):
+def _(ROOT, chunk_version, evaluate, json, labels, load, mo, pick_run, refresh):
     mo.stop(not pick_run.value, mo.callout("ยังไม่มี run ที่ให้คะแนนแล้ว: uv run python -m rag.evaluate", kind="warn"))
     refresh.value  # reloading the human labels is the only reason this cell reruns
     run_id = pick_run.value
@@ -55,10 +55,15 @@ def _(ROOT, evaluate, json, labels, load, mo, pick_run, refresh):
     # the judge scored in_subset answers only; earlier turns of a set are answered but not scored
     gap = {q: evaluate.human_gap(s["rubric"], [human_a[r][(run_id, q)] for r in reviewers if (run_id, q) in human_a[r]])
            for q, s in scores.items()}
-    mo.md(
-        f"Judge **{score_config['judge']['model']}** prompt {score_config['judge_version']} · scored {score_config['scored'][:10]} · "
-        f"{len(scores)} answers · reviewers with labels: {', '.join(reviewers) or 'none yet'}"
-    )
+    _other = chunk_version.problem(chunk_version.run_sha(_dir), f"run {run_id}")  # chunk text below would be another version's
+    mo.vstack([
+        mo.callout(mo.md(f"**Chunks differ from this run's**: chunk text shown here may not be what the run retrieved.\n\n{_other}"),
+                   kind="warn") if _other else mo.md(""),
+        mo.md(
+            f"Judge **{score_config['judge']['model']}** prompt {score_config['judge_version']} · scored {score_config['scored'][:10]} · "
+            f"{len(scores)} answers · reviewers with labels: {', '.join(reviewers) or 'none yet'}"
+        ),
+    ])
     return (
         chunks,
         gap,
