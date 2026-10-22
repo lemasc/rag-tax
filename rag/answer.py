@@ -9,7 +9,7 @@ Multi-turn sets: the retrieval query is the earlier questions of the set plus th
 the earlier turns as a conversation (question and its own answer) and gets sources only for the current turn.
 
 Output: rag/out/runs/<run_id>/answers.jsonl (one record per question) and config.json
-Run   : uv run python -m rag.answer --subset dev --gen gpt-mini [--mode hybrid] [-k 5]
+Run   : uv run python -m rag.answer --subset dev --gen gpt-mini [--mode hybrid] [-k 5] [--max-per-doc 2]
         uv run python -m rag.answer --ids Q0045,Q0343 --gen gpt-mini
 """
 
@@ -101,11 +101,11 @@ def git_commit() -> str:
 
 
 def run(qs: list[Question], all_qs: list[Question], gen_name: str, mode: str, k: int, subset: str,
-        embed_model: str = DEFAULT_MODEL) -> Path:
+        embed_model: str = DEFAULT_MODEL, max_per_doc: int | None = None) -> Path:
     from rag.retrieve import Retriever
 
     gen = llm.profile(gen_name)
-    run_id = f"{time.strftime('%Y%m%d')}-{subset}-{gen_name}-{mode}-k{k}-{PROMPT_VERSION}"
+    run_id = f"{time.strftime('%Y%m%d')}-{subset}-{gen_name}-{mode}-k{k}{f'-cap{max_per_doc}' if max_per_doc else ''}-{PROMPT_VERSION}"
     out = RUNS / run_id
     out.mkdir(parents=True, exist_ok=True)
 
@@ -119,7 +119,7 @@ def run(qs: list[Question], all_qs: list[Question], gen_name: str, mode: str, k:
     retrieved = {}
     for q in todo:  # retrieval does not depend on answers, so it all runs first, on one thread
         query = retrieval_query(q, history(q, all_qs))
-        retrieved[q.id] = (query, retriever.search(query, mode, k))
+        retrieved[q.id] = (query, retriever.search(query, mode, k, max_per_doc))
 
     records: dict[str, dict] = {}
     in_subset = {q.id for q in qs}
@@ -153,7 +153,7 @@ def run(qs: list[Question], all_qs: list[Question], gen_name: str, mode: str, k:
         generator=dict(profile=gen.name, backend=gen.backend, model=gen.model, base_url=gen.base_url, params=gen.params,
                        served_models=sorted({r["served_model"] for r in records.values()})),
         prompt_version=PROMPT_VERSION, system_prompt=SYSTEM,
-        retrieval=dict(mode=mode, k=k, embed_model=embed_model, chunks_sha=file_sha(OUT / "chunks.jsonl")),
+        retrieval=dict(mode=mode, k=k, max_per_doc=max_per_doc, embed_model=embed_model, chunks_sha=file_sha(OUT / "chunks.jsonl")),
         new_calls=len(usage), prompt_tokens=sum(u.get("prompt_tokens", 0) for u in usage),
         completion_tokens=sum(u.get("completion_tokens", 0) for u in usage),
     )
@@ -169,6 +169,7 @@ def main() -> None:
     ap.add_argument("--gen", default="gpt-mini", help="generator profile in rag/models.toml")
     ap.add_argument("--mode", choices=MODES, default="hybrid")
     ap.add_argument("-k", type=int, default=5)
+    ap.add_argument("--max-per-doc", type=int, help="at most this many chunks from one document (default: no cap)")
     a = ap.parse_args()
     all_qs = load()
     if a.ids:
@@ -178,7 +179,7 @@ def main() -> None:
             raise SystemExit(f"unknown ids: {sorted(set(want) - {q.id for q in qs})}")
     else:
         qs, subset = (dev(all_qs) if a.subset == "dev" else all_qs), a.subset
-    out = run(qs, all_qs, a.gen, a.mode, a.k, subset)
+    out = run(qs, all_qs, a.gen, a.mode, a.k, subset, max_per_doc=a.max_per_doc)
     c = json.loads((out / "config.json").read_text(encoding="utf-8"))
     print(f"{c['n_answered']} answers -> {out}")
     print(f"new calls {c['new_calls']}, tokens {c['prompt_tokens']} in + {c['completion_tokens']} out")
