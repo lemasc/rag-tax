@@ -35,7 +35,7 @@ from rag import llm
 from rag.answer import source_block
 from rag.chunk import OUT, read_jsonl
 from rag.index import DEFAULT_MODEL, embed, load_model
-from rag.labels import REFUSAL_RULE, RUNS, TAGS, answer_labels, chunk_labels, is_complete, reviewers, runs
+from rag.labels import REFUSAL_RULE, RUBRIC_VERSION, RUNS, TAGS, answer_labels, chunk_labels, is_complete, is_current, reviewers, runs
 from rag.questions import BEHAVIOURAL
 
 JUDGE_VERSION = "v2"  # v2: behaviour only on behavioural questions, refusal rule, ignored_source tag
@@ -352,7 +352,8 @@ def human_gap(rub: dict, labs: list[dict]) -> float | None:
 
 def compare(path: Path, scores: list[dict]) -> dict[str, dict]:
     """Per reviewer and pooled: judge-human agreement on the rubric items and on chunk relevance. Pairs only
-    where the reviewer's answer label is complete; chunks are matched by (question, chunk id)."""
+    where the reviewer's answer label is complete and made under the current rubric; chunks are matched by
+    (question, chunk id)."""
     by_q = {s["id"]: s for s in scores}
     chunk_ids = {r["id"]: [h["chunk_id"] for h in r["hits"]] for r in read_jsonl(path / "answers.jsonl")}
     pooled: dict[str, list] = defaultdict(list)
@@ -361,7 +362,7 @@ def compare(path: Path, scores: list[dict]) -> dict[str, dict]:
         al, cl = answer_labels(rev), chunk_labels(rev)
         pairs: dict[str, list] = defaultdict(list)
         for (rid, q), lab in al.items():
-            if rid != path.name or q not in by_q or not is_complete(lab):
+            if rid != path.name or q not in by_q or not is_current(lab):
                 continue
             rub = by_q[q]["rubric"]
             for f in ("grounded", "correct", "useful", "behaviour"):
@@ -397,6 +398,9 @@ def main() -> None:
     a = ap.parse_args()
     path = run_dir(a.run)
     if a.compare:
+        version = json.loads((out_dir(path, a.judge) / "scores_config.json").read_text(encoding="utf-8"))["judge_version"]
+        if version != RUBRIC_VERSION:
+            raise SystemExit(f"{a.judge}'s scores are judge {version} but the human labels are rubric {RUBRIC_VERSION}; re-score first")
         scores = [json.loads(ln) for ln in (out_dir(path, a.judge) / "scores.jsonl").read_text(encoding="utf-8").splitlines()]
         print_compare(compare(path, scores))
         return
