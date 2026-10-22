@@ -286,35 +286,67 @@ def split_guide(doc_id: str, text: str) -> tuple[str, list[Unit]]:
     return "\n".join(pre).strip(), units
 
 
-# ---------------------------------------------------------------- legal instruments (flat text, "ข้อ N" / "มาตรา N" / "(N)")
+# ---------------------------------------------------------------- legal instruments ("ข้อ N" / "มาตรา N" / "(N)")
 
-INSTRUMENT_HEADS = {"ข้อ": re.compile(r"(?:(?<=[\s“\"])|^)ข้อ\s*(\d+)(?=\s)"), "มาตรา": re.compile(r"(?:(?<=[\s“\"])|^)มาตรา\s*(\d+)(?=\s)")}
-PAREN_ITEM = re.compile(r"(?:(?<=[\s“\"])|^)\((\d+)\)(?=\s)")  # an amendment quotes its new items: "(1) ...
-REFERENCE = re.compile(r"(?:ตาม|ใน|ของ|แห่ง|และ|หรือ|ตั้งแต่|ถึง|ภายใต้|ดู|(?:^|\s)(?:เว้นแต่|ยกเว้น|เฉพาะ))\s*$")  # "ตาม ข้อ 2" is a reference, not a heading; "ให้ยกเว้น ข้อ 3" is not
+# The HTML gives each ข้อ and (N) item its own line (extract.html_text), so a heading is a number counting up at the start of
+# a line. Text without lines (an older extraction, one OCR page) falls back to the same numbers inside a line, told from a
+# reference ("ตามข้อ 2", "มาตรา 40 (7)") by following no reference word and, for (N), no digit.
+INSTRUMENT_HEADS = ("ข้อ", "มาตรา")
+LINE_HEADS = {w: re.compile(rf"(?m)^[ \t]*[“\"]?{w}[ \t]*(\d+)(?=\s)") for w in INSTRUMENT_HEADS}
+FLAT_HEADS = {w: re.compile(rf"(?:(?<=[\s“\"])|^){w}\s*(\d+)(?=\s)") for w in INSTRUMENT_HEADS}
+LINE_ITEM = re.compile(r"(?m)^[ \t]*[“\"]?\((\d+)\)(?=\s)")  # an amendment quotes its new items: "(1) ...
+FLAT_ITEM = re.compile(r"(?:(?<=[\s“\"])|^)\((\d+)\)(?=\s)")
+REFERENCE = re.compile(r"(?:ตาม|ใน|ของ|แห่ง|และ|หรือ|ตั้งแต่|ถึง|ภายใต้|ดู|(?:^|\s)(?:เว้นแต่|ยกเว้น|เฉพาะ))\s*$")  # "ให้ยกเว้น ข้อ 3" is not one
 INSTRUMENT_MIN_HEADS = 2
 INSTRUMENT_MIN_CHARS = 300  # a lead-in shorter than this ("ข้อ 2 ให้ยกเว้นเงินได้ดังต่อไปนี้") joins the first item after it
 INSTRUMENT_SPLIT_CHARS = 1500  # about 450 bge-m3 tokens at 3.3 chars per token; a longer heading is cut at its (N) items
 
+# The closing: the signature (กฎกระทรวง, ประกาศ, คำสั่ง: "ให้ไว้/ประกาศ/สั่ง ณ วันที่ ..."; พ.ร.ฎ.: "ผู้รับสนองพระบรมราชโองการ"), the
+# name and title lines under it, then optionally a หมายเหตุ (the reason for the instrument) and attachments (forms, examples).
+SIGNATURE = re.compile(r"(?m)^[ \t]*(?:(?:ประกาศ|สั่ง|ให้ไว้)[ \t]*ณ[ \t]*วันที่|ผู้รับสนอง)[^\n]*")
+SIGNER_TITLE = re.compile(r"อธิบดี|รัฐมนตรี|ปลัดกระทรวง|ผู้ช่วย|แทน")
+REMARK = re.compile(r"(?m)^[ \t]*หมายเหตุ")
+ANNEX = re.compile(r"(?m)^[ \t]*(?:เอกสารแนบ|ตัวอย่าง|คำขอ|แบบ)[^\n]*|^[^\n]*>>[ \t]*$")
+SIGNATURE_LINES = 5  # name lines between the date and the title
 
-def _in_sequence(text: str, pattern: re.Pattern, max_gap: int = 1, after_digit: bool = True) -> list[tuple[int, int]]:
-    """(offset, number) of the matches that count up from 1. Instruments are flat text, so a heading is told from a
-    reference ("ตามข้อ 2 ข้อ 3 และข้อ 4", "มาตรา 40 (7)") by being the next number and not following a reference word
-    or, for `(N)` (`after_digit` false), a digit. A consolidated text can skip a repealed item: a gap of up to `max_gap` is taken right after the `)`
-    that closes an amendment note."""
+
+def _in_sequence(text: str, pattern: re.Pattern, max_gap: int = 1, lines: bool = True, after_digit: bool = True) -> list[tuple[int, int]]:
+    """(offset, number) of the matches that count up from 1. A consolidated text can skip a repealed item: a gap of up
+    to `max_gap` is taken right after the `)` that closes an amendment note. Matches inside a line (`lines` false) must
+    also follow no reference word, and for `(N)` (`after_digit` false) no digit."""
     found, last = [], 0
     for m in pattern.finditer(text):
         before = text[max(0, m.start() - 12) : m.start()].rstrip()
         gap = int(m[1]) - last
-        if REFERENCE.search(before) or (before[-1:].isdigit() and not after_digit) or not (gap == 1 or 1 < gap <= max_gap and before.endswith(")")):
+        if not (gap == 1 or 1 < gap <= max_gap and before.endswith(")")):
+            continue
+        if not lines and (REFERENCE.search(before) or (before[-1:].isdigit() and not after_digit)):
             continue
         found.append((m.start(), last := int(m[1])))
     return found
 
 
+def _heads(text: str) -> tuple[str, list[tuple[int, int]]]:
+    """(word, [(offset, number)]) of the heading kind that counts up furthest, at line starts if there are any."""
+    best: tuple[str, list[tuple[int, int]]] = ("", [])
+    for w in INSTRUMENT_HEADS:
+        found = _in_sequence(text, LINE_HEADS[w])
+        if len(found) < INSTRUMENT_MIN_HEADS:
+            found = _in_sequence(text, FLAT_HEADS[w], lines=False)
+        if len(found) > len(best[1]):
+            best = (w, found)
+    return best
+
+
+def _items(text: str) -> list[tuple[int, int]]:
+    found = _in_sequence(text, LINE_ITEM, max_gap=3)
+    return found if len(found) >= 2 else _in_sequence(text, FLAT_ITEM, max_gap=3, lines=False, after_digit=False)
+
+
 def _cut_items(label: str, section: str | None, text: str, depth: int = 0) -> list[tuple[str, str | None, str]]:
     """[(label, section, text)]: the heading whole, or its lead-in and (N) items when it is long and has them. An item
     that is still long and holds a list of its own (an amendment quotes a whole new list) is cut once more."""
-    items = _in_sequence(text, PAREN_ITEM, max_gap=3, after_digit=False)
+    items = _items(text)
     if len(text) <= INSTRUMENT_SPLIT_CHARS or len(items) < 2 or depth > 1:
         return [(label, section, text)]
     lead = text[: items[0][0]].strip()
@@ -330,17 +362,53 @@ def _cut_items(label: str, section: str | None, text: str, depth: int = 0) -> li
     return parts
 
 
+def _closing(text: str, after: int) -> tuple[int, list[tuple[str, str, str]]]:
+    """(end of the last heading's text, [(label, type, text)] of what follows the signature). The signature is the first
+    one after `after` (the first heading); the last heading keeps it with the name and title lines under it, and the
+    separator lines and gazette reference that may follow. A หมายเหตุ before the first attachment is a unit of its own,
+    and the attachments, if there is more than a pointer to them, one `annex` unit; with neither, everything stays with the last heading."""
+    sig = next((m for m in SIGNATURE.finditer(text) if m.start() >= after), None)
+    if sig is None:
+        return len(text), []
+    end, titled, seen = sig.end(), False, 0
+    for ln in re.finditer(r"[^\n]*\S[^\n]*", text[sig.end():]):
+        line = ln.group().strip()
+        if REMARK.match(line) or ANNEX.match(line) or seen >= SIGNATURE_LINES or (titled and not SIGNER_TITLE.search(line)):
+            break
+        end, seen, titled = sig.end() + ln.end(), seen + 1, bool(SIGNER_TITLE.search(line))
+    annex = ANNEX.search(text, end)
+    if annex and len(text[annex.start() :].strip()) < INSTRUMENT_MIN_CHARS:  # a pointer ("เอกสารแนบ", "แบบ ล.ย.02 >>"), not the attachment
+        annex = None
+    remark = REMARK.search(text, end, annex.start() if annex else len(text))
+    cuts = [m.start() for m in (remark, annex) if m]
+    if not cuts:
+        return len(text), []
+    parts = []
+    if remark:
+        parts.append(("หมายเหตุ", "clause", text[remark.start() : annex.start() if annex else len(text)].strip()))
+    if annex:
+        parts.append((annex.group().strip()[:60], "annex", text[annex.start() :].strip()))
+    return min(cuts), parts
+
+
 def split_instrument(doc_id: str, text: str) -> tuple[str, list[Unit]]:
-    """Return (preamble, units) for a กฎกระทรวง, ประกาศ or คำสั่ง: one unit per `ข้อ N` (or `มาตรา N`, whichever counts up
-    further), and a heading over INSTRUMENT_SPLIT_CHARS is cut at its `(N)` items, each with the lead-in in its section.
-    Text is kept verbatim. Fewer than INSTRUMENT_MIN_HEADS headings means prose (a ruling): no units, the chunker windows it."""
-    heads = max((_in_sequence(text, p) for p in INSTRUMENT_HEADS.values()), key=len)
+    """Return (preamble, units) for a กฎกระทรวง, ประกาศ, คำสั่ง or พ.ร.ฎ.: one unit per `ข้อ N` (or `มาตรา N`, whichever counts
+    up further), and a heading over INSTRUMENT_SPLIT_CHARS is cut at its `(N)` items, each with the lead-in in its section.
+    What follows the signature is cut off the last heading (see `_closing`). Text is kept verbatim. Fewer than
+    INSTRUMENT_MIN_HEADS headings means prose (a ruling): no units, the chunker windows it."""
+    word, heads = _heads(text)
     if len(heads) < INSTRUMENT_MIN_HEADS:
         return text, []
-    word = next(w for w, p in INSTRUMENT_HEADS.items() if _in_sequence(text, p) == heads)
-    bounds = [p for p, _ in heads] + [len(text)]
+    body_end, tail = _closing(text, heads[0][0])
+    body = text[:body_end]
+    word, heads = _heads(body)
+    if len(heads) < INSTRUMENT_MIN_HEADS:
+        return text, []
+    bounds = [p for p, _ in heads] + [len(body)]
     units = []
     for (start, n), end in zip(heads, bounds[1:]):
-        for label, section, body in _cut_items(f"{word} {n}", None, text[start:end].strip()):
-            units.append(Unit(f"{doc_id}#{len(units) + 1:03d}", doc_id, "clause", label, body, section=section))
-    return text[: heads[0][0]].strip(), units
+        for label, section, part in _cut_items(f"{word} {n}", None, body[start:end].strip()):
+            units.append(Unit(f"{doc_id}#{len(units) + 1:03d}", doc_id, "clause", label, part, section=section))
+    for label, kind, part in tail:
+        units.append(Unit(f"{doc_id}#{len(units) + 1:03d}", doc_id, kind, label, part))
+    return body[: heads[0][0]].strip(), units
