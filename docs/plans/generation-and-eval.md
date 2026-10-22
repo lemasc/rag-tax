@@ -106,17 +106,22 @@ Report per category, not only the mean: the corpus gaps (freelance, crypto) and 
 
 ## Order
 
-1. `.env.example`, `llm.py`, `questions.py`.
-2. `answer.py` and `demo.py` with the OpenAI key on the dev subset; read the answers.
-3. The labelling notebook; a person labels the sample.
-4. `evaluate.py`: retrieval metrics, then the three answer metrics; judge validation.
-5. Full runs: the retrieval ablation, then the generator ablation once OpenRouter is set up.
+Done: `.env.example`, `llm.py`, `questions.py`; `answer.py` and `demo.py` on the dev subset; the labelling notebook and the human labels; `evaluate.py` and the judge panel; the per-document cap run; the top-50 diagnostic (verdict mixed, see *Top-50 diagnostic*).
+
+Next (revised 2026-10-22, after the top-50 diagnostic). No tuning on the 13 miss questions: they are dev questions read closely, so a setting chosen to rescue them would look better than it is. What they suggest goes into the full-run ablations instead.
+
+1. **Chunk fix**, the one already planned (Q0145's `558~002` is a cut chunk). First, because qrels are keyed by chunk id. If sources are added for the corpus gaps (see *Open decisions*), they go in here too, in the same re-index.
+2. **Qrels:** the panel's chunk grades as a first pass, with a person confirming each 2. The panel alone is too lenient on hard questions (people kept 25 of 132 of its 2s).
+3. **Full run, retrieval ablation:** dense, sparse, hybrid (required). A cross-encoder reranker and k = 10 as candidates, justified by 7 of 13 misses having an answering chunk at ranks 6–50.
+4. **Generator ablation**, as planned.
+5. **Failure analysis:** corpus gaps (Q0111 general mutual-fund gains, Q0145 documents for a first online filing), a likely wording mismatch (Q0223, a case for query rewriting), a generation failure with the answer in the top 5 (Q0272), and the category breakdown.
 
 ## Open decisions
 
 - The generator list. The judge is decided (see *Judge panel*).
 - `ragas` library or a direct implementation.
 - Who labels the retrieval sample and grades the judge-validation sample, and how many questions each.
+- Whether to add sources for the corpus gaps the top-50 diagnostic confirmed (Q0111, Q0145) or only report them. Adding them changes chunk ids, so it belongs in the chunk-fix re-index; the round 1 and 2 labels are keyed by the old ids.
 - Whether to write reference answers for a small subset anyway. That would add BERTScore as a third metric, but it costs a person's time.
 
 ## Dev run 1 (2026-10-20)
