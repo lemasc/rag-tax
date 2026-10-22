@@ -65,6 +65,10 @@ def test_status_walks_the_candidates_until_a_person_says_2():
     assert status(cands, {"a": 1, "b": 2}) == ("found", cands[1])
     assert status(cands, {"a": 0, "b": 1, "c": 1}) == ("none", None)
     assert status([], {}) == ("none", None)
+    # every: a 2 does not end the question; the best-ranked 2 counts once all are graded
+    assert status(cands, {"a": 2}, every=True) == ("pending", cands[1])
+    assert status(cands, {"a": 1, "b": 2, "c": 2}, every=True) == ("found", cands[1])
+    assert status(cands, {"a": 0, "b": 1, "c": 1}, every=True) == ("none", None)
 
 
 def test_strip_position_rises_and_keeps_a_zone_for_each_part_of_the_ranking():
@@ -134,3 +138,4 @@ def test_next_pending_goes_to_the_next_unresolved_question_and_wraps():
     assert next_pending(cands, {("Q3", "Q31"): 1}, after=("Q3", "Q31")) == ("Q3", "Q32")
     assert next_pending(cands, {("Q3", "Q31"): 1}, after=("Q3", "Q32")) == ("Q1", "Q11")  # wraps round to the first open one
     assert next_pending(cands, {("Q1", "Q11"): 2, ("Q2", "Q21"): 2, ("Q3", "Q31"): 2}) is None
+    assert next_pending(cands, {("Q1", "Q11"): 2}, after=("Q1", "Q11"), every=True) == ("Q1", "Q12")

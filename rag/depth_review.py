@@ -9,7 +9,7 @@ def _():
     """Human check of the top-50 diagnostic (rag/depth.py): for each question retrieval missed, does the chunk the panel
     thought answers it really answer it? One chunk per question; the next candidate only when the last was not a 2.
     Round 1 (closed) graded at most three panel 2s per question -> rag/eval/labels/<name>/depth.csv. Round 2 grades the
-    chunks of depth.ROUND2 for the questions round 1 left at D -> depth_r2.csv.
+    chunks of depth.ROUND2 for the questions round 1 left at D, every one of them -> depth_r2.csv.
 
     Run: uv run marimo run rag/depth_review.py --token-password <password>
     """
@@ -93,6 +93,7 @@ def _(labels, mo):
 @app.cell
 def _(cands1, cands2, mo, pick_round):
     rnd = pick_round.value
+    every = rnd == 2  # round 2 grades every chunk, so none is left with one reviewer's grade
     cands = cands2 if rnd == 2 else cands1
     order = [(q, e["chunk_id"]) for q, cs in cands.items() for e in cs]  # every candidate, question by question
     if rnd == 2:
@@ -107,7 +108,7 @@ def _(cands1, cands2, mo, pick_round):
     - <b style='color:#d9822b'>ส้ม</b> ผู้ตัดสิน LLM ให้ 2 แต่เกินโควตา 3 ชิ้นของรอบ 1 จึงยังไม่มีใครตรวจ
     - <b style='color:#7d3cbd'>ม่วง</b> ค้นเจอด้วยคำสำคัญ แต่ไม่ติด 50 อันดับแรกของทั้งสองวิธีค้น (นอกผลค้น)
 
-    **งานของคุณ:** {len(cands)} ข้อ ไม่เกิน {len(order)} ชิ้น (ประมาณ 10 นาที) ให้คะแนนแบบเดิม ถ้าชิ้นแรกของข้อได้ 2 ข้อนั้นจบเลย
+    **งานของคุณ:** {len(cands)} ข้อ ไม่เกิน {len(order)} ชิ้น (ประมาณ 10 นาที) ให้คะแนนแบบเดิม **รอบนี้ตรวจทุกชิ้น** แม้ชิ้นแรกของข้อจะได้ 2 แล้ว ทุกชิ้นจึงมีคะแนนจากผู้ตรวจทุกคน
     คะแนนเก็บแยกใน `depth_r2.csv` รอบ 1 ไม่ถูกแก้ ข้อที่ผู้ตรวจรอบ 1 เห็นไม่ตรงกัน (Q0207, Q0213) ใช้ผลรอบ 1 ตามเดิม"""), kind="warn")
     else:
         _why = mo.callout(mo.md("""**รอบ 1 (ปิดแล้ว)** · ระบบค้นไม่ถึงคำตอบใน 13 คำถาม แต่ผู้ตัดสินที่เป็น LLM บอกว่ามีชิ้นที่ "ตอบได้" อยู่ในผลค้น 50 อันดับแรก
@@ -115,7 +116,7 @@ def _(cands1, cands2, mo, pick_round):
 
     ข้อละ 1 ชิ้น ถ้าไม่ตอบ จะมีชิ้นถัดไปให้ดู (ไม่เกิน 3 ชิ้นต่อข้อ) ดูหรือแก้คะแนนได้ แต่งานตอนนี้อยู่ที่รอบ 2"""), kind="info")
     _why
-    return cands, order, rnd
+    return cands, every, order, rnd
 
 
 @app.cell
@@ -144,6 +145,7 @@ def _(
     cands2,
     chip,
     depth,
+    every,
     get_saved,
     items,
     labels,
@@ -162,11 +164,11 @@ def _(
     def _of(grades, q):
         return {k[1]: g for k, g in grades.items() if k[0] == q}
 
-    _queue = [q for q, c in cands.items() if depth.status(c, _of(mine, q))[0] == "pending"]
+    _queue = [q for q, c in cands.items() if depth.status(c, _of(mine, q), every)[0] == "pending"]
 
     def _row(q):
         _r1 = depth.status(cands1[q], _of(_team1, q))
-        _r2 = depth.status(cands2[q], _of(_team2, q)) if q in cands2 else None
+        _r2 = depth.status(cands2[q], _of(_team2, q), every=True) if q in cands2 else None
         _cls, _cls1 = depth.final_class(_r1, _r2), depth.final_class(_r1, None)
         _marks = {c["chunk_id"]: ("#c0392b" if g != 2 else "#2e9d5b", "")
                   for cs, tg in ((cands1[q], _of(_team1, q)), (cands2.get(q, []), _of(_team2, q)))
@@ -221,14 +223,14 @@ def _(
 
 
 @app.cell
-def _(cands, depth, mo, reviewer, rnd):
+def _(cands, depth, every, mo, reviewer, rnd):
     # where the reviewer is looking: starts at the first candidate still to grade; moved by the navigation and by saving
-    get_pos, set_pos = mo.state(depth.next_pending(cands, depth.human_grades([reviewer], rnd)) or next((q, cs[0]["chunk_id"]) for q, cs in cands.items()))
+    get_pos, set_pos = mo.state(depth.next_pending(cands, depth.human_grades([reviewer], rnd), every=every) or next((q, cs[0]["chunk_id"]) for q, cs in cands.items()))
     return get_pos, set_pos
 
 
 @app.cell
-def _(cands, depth, get_pos, mine, mo, order, questions, rank_th, set_pos):
+def _(cands, depth, every, get_pos, mine, mo, order, questions, rank_th, set_pos):
     _q, _c = get_pos()
     _i = order.index((_q, _c))
 
@@ -236,11 +238,11 @@ def _(cands, depth, get_pos, mine, mo, order, questions, rank_th, set_pos):
         return {k[1]: g for k, g in mine.items() if k[0] == q}
 
     def _mark(q):
-        _st = depth.status(cands[q], _own(q))[0]
+        _st = depth.status(cands[q], _own(q), every)[0]
         return "○" if _st == "pending" and not _own(q) else "◐" if _st == "pending" else "●"
 
     def _open(q):  # a question's first candidate still to grade, else its first
-        _st, _e = depth.status(cands[q], _own(q))
+        _st, _e = depth.status(cands[q], _own(q), every)
         return q, (_e if _st == "pending" else cands[q][0])["chunk_id"]
 
     _qopts = {f"{_mark(q)} {q} {questions[q].text[:46]}": q for q in cands}
@@ -249,7 +251,7 @@ def _(cands, depth, get_pos, mine, mo, order, questions, rank_th, set_pos):
     _sym = lambda c: {2: "✓ 2", 1: "1", 0: "0"}.get(mine.get((_q, c["chunk_id"])), "ยังไม่ตรวจ")  # noqa: E731
     _copts = {f"ชิ้นที่ {k} · {rank_th(c['hybrid_rank'])} · {_sym(c)}": c["chunk_id"] for k, c in enumerate(cands[_q], 1)}
     pick_c = mo.ui.radio(_copts, value=next(k for k, v in _copts.items() if v == _c), inline=True, on_change=lambda c: set_pos((_q, c)))
-    _later = depth.next_pending(cands, mine, (_q, _c))
+    _later = depth.next_pending(cands, mine, (_q, _c), every)
     prev_b = mo.ui.button(label="← ก่อนหน้า", on_click=lambda _: set_pos(order[_i - 1]), disabled=_i == 0)
     next_b = mo.ui.button(label="ถัดไป →", on_click=lambda _: set_pos(order[_i + 1]), disabled=_i == len(order) - 1)
     todo_b = mo.ui.button(label="ไปชิ้นที่ยังไม่ตรวจ ⇥", on_click=lambda _: set_pos(_later), disabled=_later is None or _later == (_q, _c))
@@ -341,14 +343,14 @@ def _(
 
 
 @app.cell
-def _(cands, cid, depth, form, mo, qid, reviewer, rnd, set_pos, set_saved):
+def _(cands, cid, depth, every, form, mo, qid, reviewer, rnd, set_pos, set_saved):
     mo.stop(form.value is None)
     _v = form.value
     mo.stop(_v["rel"] is None, mo.callout("เลือกคะแนนก่อนบันทึก", kind="warn"))
     _first_time = (qid, cid) not in depth.human_grades([reviewer], rnd)
     depth.save_depth_label(reviewer, qid, cid, _v["rel"], _v["note"], rnd)
     set_saved(lambda n: n + 1)
-    _next = depth.next_pending(cands, depth.human_grades([reviewer], rnd), (qid, cid)) if _first_time else None
+    _next = depth.next_pending(cands, depth.human_grades([reviewer], rnd), (qid, cid), every) if _first_time else None
     if _next:  # a first grade moves on to the next chunk to grade; changing an earlier grade stays where it is
         set_pos(_next)
     mo.callout(f"บันทึก {qid} (รอบ {rnd}) แล้ว" + (" · ไปชิ้นถัดไปที่ยังไม่ตรวจให้แล้ว (ย้อนกลับได้)" if _next else ""), kind="success")

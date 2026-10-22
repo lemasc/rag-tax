@@ -247,16 +247,18 @@ def candidates(pool: list[dict], grades: dict[str, int], n: int = CANDIDATES) ->
     return sorted((e for e in pool if grades[e["chunk_id"]] == 2), key=lambda e: e["hybrid_rank"])[:n]
 
 
-def status(cands: list[dict], human: dict[str, int]) -> tuple[str, dict | None]:
+def status(cands: list[dict], human: dict[str, int], every: bool = False) -> tuple[str, dict | None]:
     """Where a question stands, from its candidates and the human grade of each ({chunk: grade}, missing = not graded):
-    ('pending', the candidate to grade next), ('found', the first candidate graded 2) or ('none', None)."""
+    ('pending', the candidate to grade next), ('found', the first candidate graded 2) or ('none', None). Grading stops
+    at the first 2 unless `every`, when every candidate is graded first (round 2: so each chunk gets every reviewer's grade)."""
     for e in cands:
         g = human.get(e["chunk_id"])
         if g is None:
             return "pending", e
-        if g == 2:
+        if g == 2 and not every:
             return "found", e
-    return "none", None
+    found = next((e for e in cands if human[e["chunk_id"]] == 2), None)
+    return ("found", found) if found else ("none", None)
 
 
 def round2_candidates(items: dict[str, dict]) -> dict[str, list[dict]]:
@@ -300,12 +302,13 @@ def human_grades(reviewers: list[str], rnd: int = 1) -> dict[tuple[str, str], in
     return {k: median(v) for k, v in by.items()}
 
 
-def next_pending(cands: dict[str, list[dict]], grades: dict[tuple[str, str], int], after: tuple[str, str] | None = None) -> tuple[str, str] | None:
+def next_pending(cands: dict[str, list[dict]], grades: dict[tuple[str, str], int], after: tuple[str, str] | None = None,
+                 every: bool = False) -> tuple[str, str] | None:
     """The (question, chunk) to grade next: the pending candidate of each question not yet resolved (see `status`), the
     first one after `after` in question order, wrapping round; None when nothing is pending."""
     pend = []
     for q, cs in cands.items():
-        st, e = status(cs, {c: g for (qq, c), g in grades.items() if qq == q})
+        st, e = status(cs, {c: g for (qq, c), g in grades.items() if qq == q}, every)
         if st == "pending":
             pend.append((q, e["chunk_id"]))
     if not pend:
