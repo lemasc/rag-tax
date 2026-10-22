@@ -224,8 +224,11 @@ def _(
 
 @app.cell
 def _(cands, depth, every, mo, reviewer, rnd):
-    # where the reviewer is looking: starts at the first candidate still to grade; moved by the navigation and by saving
-    get_pos, set_pos = mo.state(depth.next_pending(cands, depth.human_grades([reviewer], rnd), every=every) or next((q, cs[0]["chunk_id"]) for q, cs in cands.items()))
+    # where the reviewer is looking: starts at the first candidate still to grade; moved by the navigation and by saving.
+    # Self loops: the navigation cell both sets and reads the position, and must redraw all its controls when one of them
+    # moves it (by default marimo does not re-run the cell whose control called the setter, which left them out of step).
+    get_pos, set_pos = mo.state(depth.next_pending(cands, depth.human_grades([reviewer], rnd), every=every) or next((q, cs[0]["chunk_id"]) for q, cs in cands.items()),
+                                allow_self_loops=True)
     return get_pos, set_pos
 
 
