@@ -284,3 +284,63 @@ def split_guide(doc_id: str, text: str) -> tuple[str, list[Unit]]:
         for i, s in enumerate(merged, 1)
     ]
     return "\n".join(pre).strip(), units
+
+
+# ---------------------------------------------------------------- legal instruments (flat text, "ข้อ N" / "มาตรา N" / "(N)")
+
+INSTRUMENT_HEADS = {"ข้อ": re.compile(r"(?:(?<=[\s“\"])|^)ข้อ\s*(\d+)(?=\s)"), "มาตรา": re.compile(r"(?:(?<=[\s“\"])|^)มาตรา\s*(\d+)(?=\s)")}
+PAREN_ITEM = re.compile(r"(?:(?<=[\s“\"])|^)\((\d+)\)(?=\s)")  # an amendment quotes its new items: "(1) ...
+REFERENCE = re.compile(r"(?:ตาม|ใน|ของ|แห่ง|และ|หรือ|ตั้งแต่|ถึง|ภายใต้|ดู|(?:^|\s)(?:เว้นแต่|ยกเว้น|เฉพาะ))\s*$")  # "ตาม ข้อ 2" is a reference, not a heading; "ให้ยกเว้น ข้อ 3" is not
+INSTRUMENT_MIN_HEADS = 2
+INSTRUMENT_MIN_CHARS = 300  # a lead-in shorter than this ("ข้อ 2 ให้ยกเว้นเงินได้ดังต่อไปนี้") joins the first item after it
+INSTRUMENT_SPLIT_CHARS = 1500  # about 450 bge-m3 tokens at 3.3 chars per token; a longer heading is cut at its (N) items
+
+
+def _in_sequence(text: str, pattern: re.Pattern, max_gap: int = 1, after_digit: bool = True) -> list[tuple[int, int]]:
+    """(offset, number) of the matches that count up from 1. Instruments are flat text, so a heading is told from a
+    reference ("ตามข้อ 2 ข้อ 3 และข้อ 4", "มาตรา 40 (7)") by being the next number and not following a reference word
+    or, for `(N)` (`after_digit` false), a digit. A consolidated text can skip a repealed item: a gap of up to `max_gap` is taken right after the `)`
+    that closes an amendment note."""
+    found, last = [], 0
+    for m in pattern.finditer(text):
+        before = text[max(0, m.start() - 12) : m.start()].rstrip()
+        gap = int(m[1]) - last
+        if REFERENCE.search(before) or (before[-1:].isdigit() and not after_digit) or not (gap == 1 or 1 < gap <= max_gap and before.endswith(")")):
+            continue
+        found.append((m.start(), last := int(m[1])))
+    return found
+
+
+def _cut_items(label: str, section: str | None, text: str, depth: int = 0) -> list[tuple[str, str | None, str]]:
+    """[(label, section, text)]: the heading whole, or its lead-in and (N) items when it is long and has them. An item
+    that is still long and holds a list of its own (an amendment quotes a whole new list) is cut once more."""
+    items = _in_sequence(text, PAREN_ITEM, max_gap=3, after_digit=False)
+    if len(text) <= INSTRUMENT_SPLIT_CHARS or len(items) < 2 or depth > 1:
+        return [(label, section, text)]
+    lead = text[: items[0][0]].strip()
+    trail = " ".join(filter(None, [section, " ".join(lead[:80].split())]))  # the lead-in starts with its own label
+    bounds = [p for p, _ in items] + [len(text)]
+    parts = []
+    for (a, n), b in zip(items, bounds[1:]):
+        parts += _cut_items(f"({n})", trail, text[a:b].strip(), depth + 1)
+    if len(lead) < INSTRUMENT_MIN_CHARS:
+        parts[0] = (parts[0][0], parts[0][1], lead + "\n" + parts[0][2])
+    else:
+        parts.insert(0, (label, section, lead))
+    return parts
+
+
+def split_instrument(doc_id: str, text: str) -> tuple[str, list[Unit]]:
+    """Return (preamble, units) for a กฎกระทรวง, ประกาศ or คำสั่ง: one unit per `ข้อ N` (or `มาตรา N`, whichever counts up
+    further), and a heading over INSTRUMENT_SPLIT_CHARS is cut at its `(N)` items, each with the lead-in in its section.
+    Text is kept verbatim. Fewer than INSTRUMENT_MIN_HEADS headings means prose (a ruling): no units, the chunker windows it."""
+    heads = max((_in_sequence(text, p) for p in INSTRUMENT_HEADS.values()), key=len)
+    if len(heads) < INSTRUMENT_MIN_HEADS:
+        return text, []
+    word = next(w for w, p in INSTRUMENT_HEADS.items() if _in_sequence(text, p) == heads)
+    bounds = [p for p, _ in heads] + [len(text)]
+    units = []
+    for (start, n), end in zip(heads, bounds[1:]):
+        for label, section, body in _cut_items(f"{word} {n}", None, text[start:end].strip()):
+            units.append(Unit(f"{doc_id}#{len(units) + 1:03d}", doc_id, "clause", label, body, section=section))
+    return text[: heads[0][0]].strip(), units

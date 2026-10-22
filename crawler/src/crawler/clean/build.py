@@ -22,7 +22,7 @@ from crawler.clean.gazette import strip_page_headers
 from crawler.clean.pages import demote_headings, replace_pages, take_page_anchors
 from crawler.clean.rejoin import fix_tone_marks, rejoin
 from crawler.clean.text import drop_empty_cells, drop_page_numbers, normalize
-from crawler.clean.units import split_faq, split_guide, split_statute
+from crawler.clean.units import split_faq, split_guide, split_instrument, split_statute
 
 DATA = Path("data")
 OUT = DATA / "clean"
@@ -62,11 +62,12 @@ def page_docs() -> tuple[list[dict], list[dict]]:
     return docs, units
 
 
-def legal_docs() -> list[dict]:
+def legal_docs() -> tuple[list[dict], list[dict]]:
+    """Documents and units of the legal instruments the Code cites; units only for those with `ข้อ`/`มาตรา` headings."""
     core = {r["url"]: r for r in csv.DictReader((DATA / "legal_core.csv").open(encoding="utf-8")) if r["decision"] == "keep"}
     scope_path = DATA / "legal_scope.csv"
     scope = {r["url"]: r for r in csv.DictReader(scope_path.open(encoding="utf-8"))} if scope_path.exists() else {}
-    docs = []
+    docs, units = [], []
     for r in csv.DictReader((DATA / "legal_text.csv").open(encoding="utf-8")):
         c = core.get(r["url"])
         if c is None or r["status"] != "ok":
@@ -81,14 +82,18 @@ def legal_docs() -> list[dict]:
             text, fixes = fix_tone_marks(text)
         text, pages = take_page_anchors(text)  # last: offsets are into the final text
         s = scope.get(r["url"], {})
+        include = s.get("scope") != "non_pit"
+        preamble, us = split_instrument(Path(r["file"]).stem, text) if include else ("", [])
+        preamble = preamble if us else ""
         docs.append(dict(
             doc_id=Path(r["file"]).stem, source="legal", url=r["url"], kind=c["kind"].split(":")[0], role="content",
-            include=s.get("scope") != "non_pit", scope=s.get("scope") or None, pit_clauses=s.get("pit_clauses") or None,
+            include=include, scope=s.get("scope") or None, pit_clauses=s.get("pit_clauses") or None,
             title=c["title"], breadcrumb=[], last_update=None, tax_year=None, year=c["year"] or None,
-            text_method=r["method"], preamble="", n_units=0, n_chars=len(text), flags=[], text=text,
+            text_method=r["method"], preamble=preamble, n_units=len(us), n_chars=len(text), flags=[], text=text,
             gazette_date=gazette_date, n_header_lines_removed=len(removed), n_joins=len(joins), n_tone_fixes=len(fixes), pages=pages,
         ))
-    return docs
+        units += [u.to_dict() for u in us]
+    return docs, units
 
 
 def guide_docs() -> tuple[list[dict], list[dict]]:
@@ -163,7 +168,9 @@ def apply_decisions(docs: list[dict], units: list[dict], decisions: list[dict]) 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     docs, units = page_docs()
-    docs += legal_docs()
+    legal, legal_units = legal_docs()
+    docs += legal
+    units += legal_units
     guide, guide_units = guide_docs()
     docs += guide
     units += guide_units
