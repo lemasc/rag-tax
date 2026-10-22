@@ -26,9 +26,10 @@ from crawler.clean.units import split_faq, split_statute
 
 DATA = Path("data")
 OUT = DATA / "clean"
-# Typhoon OCR of the 2568 filling guides (`~/san/ocr/typhoon_ocr_file.py`, copied here as <stem>.md and checked in).
+# Typhoon OCR of the 2568 filling guides (`~/san/ocr/typhoon_ocr_file.py`), cached next to the PDFs; data/raw is not
+# checked in, the cleaned text in data/clean is.
 GUIDE_KIND = "คู่มือกรอกแบบ"
-GUIDE_TEXT = DATA / "text" / "guide"
+GUIDE_OCR = DATA / "raw" / "pit2568" / "ocr"
 
 # Source-side defects we know about and do not repair here. Keyed by doc_id; surfaced in `flags`.
 KNOWN_ISSUES: dict[str, str] = {}  # nothing outstanding; 60061 was fixed in parse._wrap_bare_inline
@@ -96,7 +97,7 @@ def guide_docs() -> list[dict]:
         if r["kind"] != GUIDE_KIND:
             continue
         stem = r["url"].rsplit("/", 1)[-1].removesuffix(".pdf")
-        path = GUIDE_TEXT / f"{stem}.md"
+        path = GUIDE_OCR / f"{stem}.md"
         if not path.exists():
             raise SystemExit(f"{stem} is in legal_catalog.csv as {GUIDE_KIND} but {path} is missing")
         text, joins = rejoin(drop_empty_cells(normalize(path.read_text(encoding="utf-8"))))
