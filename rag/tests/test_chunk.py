@@ -30,6 +30,27 @@ def test_hard_cut_takes_longest_prefixes():
     assert hard_cut("abcdefg", 3, len) == ["abc", "def", "g"]
 
 
+def test_split_table_parts_repeat_the_header_row_and_separator():
+    head = "| ลำดับ | ชื่อ |\n| --- | --- |"
+    rows = [f"| {i} | พรรค{i} |" for i in range(1, 9)]
+    text = "ก่อนตาราง\n" + head + "\n" + "\n".join(rows) + "\nหลังตาราง"
+    parts = split(text, 60, len)
+    assert len(parts) > 2 and all(len(p) <= 60 for p in parts)
+    assert parts[0].startswith("ก่อนตาราง\n" + head)
+    later = [p for p in parts[1:] if p.startswith("|")]
+    assert later and all(p.startswith(head + "\n| ") for p in later)
+    body = [ln for p in parts for ln in p.split("\n") if ln not in head.split("\n") and ln.startswith("| ")]
+    assert body == rows  # every row once, in order
+    assert parts[-1].endswith("หลังตาราง")
+
+
+def test_split_gives_prose_after_a_table_no_header():
+    text = "| a | b |\n| --- | --- |\n| 1 | 2 |\n" + "\n".join(["ข้อความหลังตารางยาวๆ"] * 6)
+    parts = split(text, 40, len)
+    assert len(parts) > 2 and parts[0].startswith("| a | b |\n| --- | --- |\n| 1 | 2 |")
+    assert all("| a |" not in p for p in parts[1:])
+
+
 def doc(doc_id, include=True, text="", preamble=""):
     return dict(doc_id=doc_id, include=include, source="page", kind="faq", title="T", url="u", tax_year=None,
                 flags=[], text=text, preamble=preamble)

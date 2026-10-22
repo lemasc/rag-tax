@@ -55,32 +55,63 @@ def hard_cut(text: str, limit: int, count: Count) -> list[str]:
     return out + [text] if text else out
 
 
-def pack(parts: list[str], limit: int, count: Count, sep: str) -> list[str]:
-    """Greedy packing: join consecutive parts with `sep` while the joined text fits. Parts must each fit."""
+def pack(parts: list[str], limit: int, count: Count, sep: str, heads: list[str] | None = None) -> list[str]:
+    """Greedy packing: join consecutive parts with `sep` while the joined text fits. Parts must each fit.
+
+    `heads` (parallel to parts, "" for none) is the header of the markdown table a part is a row of: a part that opens
+    a new chunk gets it in front, so a table cut between rows keeps its column names in every piece."""
     out, cur = [], ""
-    for p in parts:
+    for i, p in enumerate(parts):
         if cur and count(cur + sep + p) <= limit:
             cur = cur + sep + p
         else:
             if cur:
                 out.append(cur)
-            cur = p
+            head = heads[i] if heads else ""
+            cur = head + sep + p if head and count(head + sep + p) <= limit else p
     return out + [cur] if cur else out
+
+
+TABLE_SEPARATOR = re.compile(r"^\|(?:\s*:?-{3,}:?\s*\|)+$")  # `| --- | :-: |`
+
+
+def table_heads(lines: list[str]) -> tuple[list[str], list[str]]:
+    """Mark the markdown tables in `lines` (one row per line): -> (lines, heads), where a table's header row and its
+    separator line become one line (they must never be parted) and each later row of the table has that pair as head."""
+    out, heads, head = [], [], ""
+    i = 0
+    while i < len(lines):
+        ln = lines[i]
+        if ln.startswith("|") and i + 1 < len(lines) and TABLE_SEPARATOR.match(lines[i + 1]):
+            head = ln + "\n" + lines[i + 1]
+            out.append(head)
+            heads.append("")
+            i += 2
+            continue
+        out.append(ln)
+        heads.append(head if ln.startswith("|") else "")
+        if not ln.startswith("|"):
+            head = ""
+        i += 1
+    return out, heads
 
 
 def split(text: str, limit: int, count: Count) -> list[str]:
     """Paragraphs packed up to `limit`. A paragraph that is too long is split at spaces (in Thai they separate
-    clauses and phrases), and a space-free run that is still too long is cut by tokens."""
-    paras = []
-    for para in (p.strip() for p in text.split("\n")):
-        if not para:
-            continue
+    clauses and phrases), and a space-free run that is still too long is cut by tokens. A markdown table is cut between
+    its rows (one row per line) and each later part starts with the table's header row and separator line."""
+    lines, line_heads = table_heads([p.strip() for p in text.split("\n") if p.strip()])
+    paras, heads = [], []
+    for para, head in zip(lines, line_heads):
         if count(para) <= limit:
             paras.append(para)
+            heads.append(head)
             continue
         words = [w for p in para.split(" ") if p for w in hard_cut(p, limit, count)]
-        paras += pack(words, limit, count, " ")
-    return pack(paras, limit, count, "\n")
+        pieces = pack(words, limit, count, " ")
+        paras += pieces
+        heads += [""] * len(pieces)
+    return pack(paras, limit, count, "\n", heads)
 
 
 def header_of(*parts: str | None) -> str:
