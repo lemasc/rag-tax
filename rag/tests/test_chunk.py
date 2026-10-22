@@ -1,14 +1,16 @@
 """rag.chunk: packing invariants on synthetic text (characters as tokens), and the built chunk table."""
 
+import hashlib
 import json
 from pathlib import Path
 
 import pytest
 
-from rag.chunk import MAX_TOKENS, hard_cut, make_chunks, split
+from rag.chunk import MAX_TOKENS, TOKENIZER, WINDOW_TOKENS, hard_cut, make_chunks, split
 
 CHUNKS = Path(__file__).parent.parent / "out" / "chunks.jsonl"
 CLEAN = Path(__file__).parent.parent.parent / "crawler" / "data" / "clean"
+FREEZE = Path(__file__).parent.parent / "chunks_freeze.json"
 
 
 def squash(s: str) -> str:
@@ -95,3 +97,12 @@ def test_built_chunks_cover_exactly_the_included_units(built):
     want = {u["unit_id"] for u in units if u["include"] and docs[u["doc_id"]]["include"]}
     assert {c["unit_id"] for c in built if c["unit_id"]} == want
     assert {c["doc_id"] for c in built} == {d for d, r in docs.items() if r["include"]}
+
+
+def test_built_chunks_are_the_frozen_ones():
+    """Qrels key on chunk ids, so the chunk table changes only on purpose: regenerate, re-map the qrels, update the freeze."""
+    if not CHUNKS.exists():
+        pytest.skip("rag/out/chunks.jsonl not built")
+    freeze = json.loads(FREEZE.read_text(encoding="utf-8"))
+    assert (TOKENIZER, MAX_TOKENS, WINDOW_TOKENS) == (freeze["tokenizer"], freeze["max_tokens"], freeze["window_tokens"])
+    assert hashlib.sha256(CHUNKS.read_bytes()).hexdigest() == freeze["sha256"], "chunks.jsonl differs from rag/chunks_freeze.json"
