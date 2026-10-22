@@ -9,14 +9,14 @@ BODY = "ก" * (GUIDE_MIN_CHARS + 10)
 
 
 def test_sections_follow_headings_and_carry_the_trail():
-    text = f"# หัวเรื่อง\n{BODY}\n## ส่วน 1\n{BODY}\n### ย่อย 1.1\n{BODY}\n## ส่วน 2\n{BODY}"
+    text = f"## ข้อ 1 ก\n{BODY}\n### 1. ข\n{BODY}\n#### 1.1 ค\n{BODY}\n## ข้อ 2 ง\n{BODY}"
     pre, units = split_guide("d", text)
     assert pre == ""
     assert [(u.unit_id, u.label, u.section) for u in units] == [
-        ("d#001", "หัวเรื่อง", None),
-        ("d#002", "ส่วน 1", "หัวเรื่อง"),
-        ("d#003", "ย่อย 1.1", "หัวเรื่อง > ส่วน 1"),
-        ("d#004", "ส่วน 2", "หัวเรื่อง"),
+        ("d#001", "ข้อ 1 ก", None),
+        ("d#002", "1. ข", "ข้อ 1 ก"),
+        ("d#003", "1.1 ค", "ข้อ 1 ก > 1. ข"),
+        ("d#004", "ข้อ 2 ง", None),
     ]
     assert all(u.type == "guide" and u.text == BODY for u in units)
 
@@ -31,7 +31,13 @@ def test_bold_only_lines_are_headings_but_bold_in_a_sentence_is_not():
 def test_item_headings_are_peers_whatever_the_ocr_marked():
     text = f"# ข\n## ข้อ 3 ก\n{BODY}\n### หักค่าใช้จ่าย\n{BODY}\n**ข้อ 4 ข**\n{BODY}\n#### หักค่าใช้จ่าย\n{BODY}"
     _, units = split_guide("d", text)
-    assert [u.section for u in units if u.label == "หักค่าใช้จ่าย"] == ["ข > ข้อ 3 ก", "ข > ข้อ 4 ข"]
+    assert [u.section for u in units if u.label == "หักค่าใช้จ่าย"] == ["ข้อ 3 ก", "ข้อ 4 ข"]
+
+
+def test_an_unnumbered_heading_hangs_on_the_nearest_item_not_on_a_numbered_one_and_does_not_swallow_the_items_after_it():
+    text = f"# ยกเว้น\n{BODY}\n## ข้อ 2 ก\n{BODY}\n### 2. ข\n{BODY}\n**คำเตือน**\n{BODY}\n## ข้อ 3 ค\n{BODY}"
+    _, units = split_guide("d", text)
+    assert [(u.label, u.section) for u in units] == [("ยกเว้น", None), ("ข้อ 2 ก", None), ("2. ข", "ข้อ 2 ก"), ("คำเตือน", "ข้อ 2 ก"), ("ข้อ 3 ค", None)]
 
 
 def test_short_sections_join_the_next_and_a_short_last_joins_the_one_before():

@@ -81,8 +81,8 @@ def test_the_signature_stays_with_the_last_heading_and_the_note_is_a_unit():
 
 def test_an_attachment_after_the_signature_is_an_annex_unit_but_a_pointer_to_one_is_not():
     sign = "\nสั่ง ณ วันที่ 7 กุมภาพันธ์ พ.ศ. 2543\nสุชาติ เชาว์วิศิษฐ\nอธิบดีกรมสรรพากร\n"
-    _, us = split_instrument("d", f"ข้อ 1 {BODY}\nข้อ 2 {BODY}{sign}แบบแจ้งรายการเพื่อการหักลดหย่อน (แบบ ล.ย.01) >>\n{BODY * 3}")
-    assert [u.type for u in us] == ["clause", "clause", "annex"] and us[2].label.startswith("แบบแจ้งรายการ")
+    _, us = split_instrument("d", f"ข้อ 1 {BODY}\nข้อ 2 {BODY}{sign}คำขอยื่นแบบแสดงรายการภาษี\n{BODY * 3}")
+    assert [u.type for u in us] == ["clause", "clause", "annex"] and us[2].label.startswith("คำขอยื่นแบบ")
     _, us = split_instrument("d", f"ข้อ 1 {BODY}\nข้อ 2 {BODY}{sign}แบบ ล.ย.02 >>")
     assert [u.label for u in us] == ["ข้อ 1", "ข้อ 2"] and us[1].text.endswith("แบบ ล.ย.02 >>")
 
@@ -92,3 +92,12 @@ def test_a_royal_decree_closes_at_the_endorsement_not_at_ให้ไว้_at_t
     pre, us = split_instrument("d", text)
     assert pre.endswith("20 มีนาคม พ.ศ. 2536") and [u.label for u in us] == ["มาตรา 1", "มาตรา 2", "หมายเหตุ"]
     assert us[1].text.endswith("-----")
+
+
+def test_an_annex_with_worked_examples_is_cut_at_each_example_and_a_form_pointer_stays_in_the_body():
+    sign = "\nสั่ง ณ วันที่ 7 กุมภาพันธ์ พ.ศ. 2543\nสุชาติ เชาว์วิศิษฐ\nอธิบดีกรมสรรพากร\nแบบแจ้งรายการเพื่อการหักลดหย่อน (แบบ ล.ย.01) >>\n"
+    examples = "\n".join(f"ตัวอย่างที่ {n}\nกรณีที่ {n}\n{BODY * 2}" for n in (1, 2, 3))
+    _, us = split_instrument("d", f"ข้อ 1 {BODY}\nข้อ 2 {BODY}{sign}ตัวอย่างการคำนวณภาษี\n{examples}")
+    assert [u.label for u in us] == ["ข้อ 1", "ข้อ 2", "ตัวอย่างที่ 1", "ตัวอย่างที่ 2", "ตัวอย่างที่ 3"]
+    assert us[1].text.endswith("(แบบ ล.ย.01) >>") and us[2].text.startswith("ตัวอย่างการคำนวณภาษี") and us[3].text.startswith("ตัวอย่างที่ 2")
+    assert [u.type for u in us] == ["clause", "clause", "annex", "annex", "annex"]

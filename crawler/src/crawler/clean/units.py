@@ -219,6 +219,8 @@ def _heading(line: str) -> tuple[int, str] | None:
         level = DECIMAL_LEVEL
     elif NUMBERED.match(title):
         level = NUMBERED_LEVEL
+    else:  # no number says nothing about depth, and `#` is as random as bold: hang it on the nearest ข้อ
+        level = BOLD_LEVEL
     return level, title
 
 
@@ -247,13 +249,14 @@ def _split_decimal_items(secs: list[dict]) -> list[dict]:
     return out
 
 
-def split_guide(doc_id: str, text: str) -> tuple[str, list[Unit]]:
+def split_guide(doc_id: str, text: str, unit_type: str = "guide") -> tuple[str, list[Unit]]:
     """Return (preamble, units): one unit per heading section of a Typhoon-OCR filling guide (ภ.ง.ด.90/91/94).
 
     Boundaries are `#` headings and lines that are only bold; the OCR marks few of them (8-17 per guide), so a section
     can still be long and the chunker windows it. The heading trail ("วิธีกรอก... > ข้อ 3 ... > 2. เงินส่วนแบ่ง...") is
     the unit's `section`, the section's own heading its `label`. A section under GUIDE_MIN_CHARS (a heading followed
     at once by a sub-heading, a one-line item) takes in the section after it, whose heading stays in the text as a line.
+    `unit_type` names the units: "guide", or "section" for a page whose headings were inserted (`text.insert_headings`).
     """
     secs: list[dict] = []  # {"section", "label", "head", "lines"}
     trail: list[tuple[int, str]] = []
@@ -263,7 +266,7 @@ def split_guide(doc_id: str, text: str) -> tuple[str, list[Unit]]:
         if h is None:
             (secs[-1]["lines"] if secs else pre).append(line)
             continue
-        while trail and trail[-1][0] >= h[0]:
+        while trail and (trail[-1][0] >= h[0] or h[0] == BOLD_LEVEL and trail[-1][0] > ITEM_LEVEL):  # unnumbered: under a ข้อ, not an item
             trail.pop()
         secs.append(dict(section=" > ".join(t for _, t in trail) or None, label=h[1], head=line.strip(), lines=[]))
         trail.append(h)
@@ -279,7 +282,7 @@ def split_guide(doc_id: str, text: str) -> tuple[str, list[Unit]]:
         merged[-1]["lines"] += [last["head"], *last["lines"]]
 
     units = [
-        Unit(unit_id=f"{doc_id}#{i:03d}", doc_id=doc_id, type="guide", label=s["label"], section=s["section"],
+        Unit(unit_id=f"{doc_id}#{i:03d}", doc_id=doc_id, type=unit_type, label=s["label"], section=s["section"],
              text=re.sub(r"\n{3,}", "\n\n", "\n".join(s["lines"])).strip())
         for i, s in enumerate(merged, 1)
     ]
@@ -307,6 +310,8 @@ SIGNATURE = re.compile(r"(?m)^[ \t]*(?:(?:ประกาศ|สั่ง|ให
 SIGNER_TITLE = re.compile(r"อธิบดี|รัฐมนตรี|ปลัดกระทรวง|ผู้ช่วย|แทน")
 REMARK = re.compile(r"(?m)^[ \t]*หมายเหตุ")
 ANNEX = re.compile(r"(?m)^[ \t]*(?:เอกสารแนบ|ตัวอย่าง|คำขอ|แบบ)[^\n]*|^[^\n]*>>[ \t]*$")
+ANNEX_POINTER = 80  # a line this short that ends in ">>" ("แบบ ล.ย.02 >>") points at a form the page does not carry
+ANNEX_EXAMPLE = re.compile(r"(?m)^[ \t]*ตัวอย่างที่\s*\d+[^\n]*")
 SIGNATURE_LINES = 5  # name lines between the date and the title
 
 
@@ -362,11 +367,21 @@ def _cut_items(label: str, section: str | None, text: str, depth: int = 0) -> li
     return parts
 
 
+def _annex_units(annex: str) -> list[tuple[str, str, str]]:
+    """One `annex` unit, or one per worked example ("ตัวอย่างที่ 3") when the attachment has several; what comes before the
+    first example (the attachment's title) goes with it, and each unit is named after its own first line."""
+    examples = [m.start() for m in ANNEX_EXAMPLE.finditer(annex)]
+    if len(examples) < 2:
+        return [(annex.split("\n", 1)[0].strip()[:60], "annex", annex)]
+    cuts = [0] + examples[1:] + [len(annex)]
+    return [(ANNEX_EXAMPLE.search(annex[a:b]).group().strip()[:60], "annex", annex[a:b].strip()) for a, b in zip(cuts, cuts[1:])]
+
+
 def _closing(text: str, after: int) -> tuple[int, list[tuple[str, str, str]]]:
     """(end of the last heading's text, [(label, type, text)] of what follows the signature). The signature is the first
     one after `after` (the first heading); the last heading keeps it with the name and title lines under it, and the
     separator lines and gazette reference that may follow. A หมายเหตุ before the first attachment is a unit of its own,
-    and the attachments, if there is more than a pointer to them, one `annex` unit; with neither, everything stays with the last heading."""
+    and the attachments, if there is more than a pointer to them, `annex` units (one, or one per worked example); with neither, everything stays with the last heading."""
     sig = next((m for m in SIGNATURE.finditer(text) if m.start() >= after), None)
     if sig is None:
         return len(text), []
@@ -376,7 +391,7 @@ def _closing(text: str, after: int) -> tuple[int, list[tuple[str, str, str]]]:
         if REMARK.match(line) or ANNEX.match(line) or seen >= SIGNATURE_LINES or (titled and not SIGNER_TITLE.search(line)):
             break
         end, seen, titled = sig.end() + ln.end(), seen + 1, bool(SIGNER_TITLE.search(line))
-    annex = ANNEX.search(text, end)
+    annex = next((m for m in ANNEX.finditer(text, end) if not (m.group().strip().endswith(">>") and len(m.group().strip()) < ANNEX_POINTER)), None)
     if annex and len(text[annex.start() :].strip()) < INSTRUMENT_MIN_CHARS:  # a pointer ("เอกสารแนบ", "แบบ ล.ย.02 >>"), not the attachment
         annex = None
     remark = REMARK.search(text, end, annex.start() if annex else len(text))
@@ -387,7 +402,7 @@ def _closing(text: str, after: int) -> tuple[int, list[tuple[str, str, str]]]:
     if remark:
         parts.append(("หมายเหตุ", "clause", text[remark.start() : annex.start() if annex else len(text)].strip()))
     if annex:
-        parts.append((annex.group().strip()[:60], "annex", text[annex.start() :].strip()))
+        parts += _annex_units(text[annex.start() :].strip())
     return min(cuts), parts
 
 

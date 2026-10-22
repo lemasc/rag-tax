@@ -55,3 +55,46 @@ def drop_page_numbers(text: str) -> str:
     """Remove the printed page number Typhoon marks as its own `<page_number>N</page_number>` line (76 in the three
     2568 guides). The PDF page is already kept as a page anchor."""
     return PAGE_NUMBER.sub("", text)
+
+
+# A page whose HTML puts every text run on its own line (61549: 1,751 lines, median 19 characters, no blank lines).
+HARD_WRAPPED_LINES = 40
+HARD_WRAPPED_MEDIAN = 45
+BLOCK_START = re.compile(r"^(?:\||[QA]\s*\d+\b|\d+\s*:|\d+\s*[.)](?:\s|$)|\d+\.\d+|[-•*–]\s|\([ก-ฮ\d]+\)|\*\*|#)")
+
+
+def hard_wrapped(text: str) -> bool:
+    """True for a document whose lines are text runs, not paragraphs: at least HARD_WRAPPED_LINES lines and a median line
+    of HARD_WRAPPED_MEDIAN characters or less."""
+    lens = sorted(len(ln) for ln in text.split("\n") if ln.strip())
+    return len(lens) >= HARD_WRAPPED_LINES and lens[len(lens) // 2] <= HARD_WRAPPED_MEDIAN
+
+
+def unwrap_lines(text: str) -> str:
+    """Join each line to the one before it with a space, except a blank line, which stays, and a line that starts a block:
+    a Q or A marker (or a bare `2 :` whose Q was lost), a numbered or bulleted item, a table row, a heading; nothing joins
+    onto a table row. Only whitespace changes, so a splitter that works on lines
+    (the FAQ markers) can run on the result."""
+    out: list[str] = []
+    for ln in text.split("\n"):
+        if out and out[-1] and not out[-1].startswith("|") and ln.strip() and not BLOCK_START.match(ln.strip()):
+            out[-1] += " " + ln.strip()
+        else:
+            out.append(ln.strip())
+    return "\n".join(out)
+
+
+def insert_headings(text: str, rows: list[dict]) -> str:
+    """Put each row's `heading` on its own `## ` line before the line that starts with its `before`. For a page whose
+    section headings are pictures (63437: six banner images): the text starts each section where the picture was. A row
+    whose `before` matches no line start after the previous row's raises, so a change of the page text cannot move a
+    heading silently."""
+    out, pos = text, 0
+    for r in rows:
+        m = re.compile(r"(?m)^" + re.escape(r["before"])).search(out, pos)
+        if m is None:
+            raise ValueError(f"page_headings.csv: no line of page {r['page_id']} starts with {r['before']!r} after the previous heading")
+        out = out[: m.start()] + f"## {r['heading']}\n" + out[m.start() :]
+        pos = m.start() + len(r["heading"]) + 4
+    return out
+

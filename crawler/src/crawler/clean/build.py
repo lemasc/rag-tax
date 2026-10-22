@@ -21,7 +21,7 @@ from crawler.clean import classify
 from crawler.clean.gazette import strip_page_headers
 from crawler.clean.pages import demote_headings, replace_pages, take_page_anchors
 from crawler.clean.rejoin import fix_tone_marks, rejoin
-from crawler.clean.text import drop_empty_cells, drop_page_numbers, normalize
+from crawler.clean.text import drop_empty_cells, drop_page_numbers, hard_wrapped, insert_headings, normalize, unwrap_lines
 from crawler.clean.units import split_faq, split_guide, split_instrument, split_statute
 
 DATA = Path("data")
@@ -31,6 +31,7 @@ OUT = DATA / "clean"
 GUIDE_KIND = "คู่มือกรอกแบบ"
 GUIDE_OCR = DATA / "raw" / "pit2568" / "ocr"
 GUIDE_HEADINGS = DATA / "guide_heading_decisions.csv"  # keep/demote per OCR heading, from crawler.guide_headings
+PAGE_HEADINGS = DATA / "page_headings.csv"  # page_id, heading, before, source, note: headings that are pictures on the page (63437)
 GUIDE_OVERRIDES = DATA / "guide_overrides"  # <stem>/page-NN.md: hand-corrected text for a page the OCR misreads (checked in)
 
 # Source-side defects we know about and do not repair here. Keyed by doc_id; surfaced in `flags`.
@@ -39,10 +40,16 @@ KNOWN_ISSUES: dict[str, str] = {}  # nothing outstanding; 60061 was fixed in par
 
 def page_docs() -> tuple[list[dict], list[dict]]:
     docs, units = [], []
+    headings: dict[str, list[dict]] = {}
+    for r in csv.DictReader(PAGE_HEADINGS.open(encoding="utf-8")) if PAGE_HEADINGS.exists() else []:
+        headings.setdefault(r["page_id"], []).append(r)
     for line in (DATA / "pages.jsonl").open(encoding="utf-8"):
         p = json.loads(line)
         doc_id = p["url"].rsplit("/", 1)[-1].removesuffix(".html")
         text, joins = rejoin(normalize(p["text"] or ""))
+        wrapped = hard_wrapped(text)
+        if wrapped:  # every text run on its own line (61549): paragraphs are restored before the splitter reads the lines
+            text = unwrap_lines(text)
         kind, role = classify.kind(p), classify.role(p)
         preamble, us = "", []
         if kind == "statute":
@@ -51,7 +58,10 @@ def page_docs() -> tuple[list[dict], list[dict]]:
                 role, us = "toc", []
         elif kind == "faq":
             preamble, us = split_faq(doc_id, text)
-        flags = [KNOWN_ISSUES[doc_id]] if doc_id in KNOWN_ISSUES else []
+        elif doc_id in headings:
+            text = insert_headings(text, headings[doc_id])
+            preamble, us = split_guide(doc_id, text, unit_type="section")
+        flags = ([KNOWN_ISSUES[doc_id]] if doc_id in KNOWN_ISSUES else []) + (["unwrapped_lines"] if wrapped else [])
         docs.append(dict(
             doc_id=doc_id, source="page", url=p["url"], kind=kind, role=role, include=role == "content",
             title=p["heading"], breadcrumb=p["breadcrumb"], last_update=p["last_update"], tax_year=classify.tax_year(p),

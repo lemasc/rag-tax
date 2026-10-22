@@ -5,7 +5,7 @@ import re
 
 import pytest
 
-from crawler.clean.text import normalize
+from crawler.clean.text import hard_wrapped, insert_headings, normalize, unwrap_lines
 from conftest import DATA
 
 
@@ -74,3 +74,28 @@ def test_drop_page_numbers_removes_only_the_marker_line():
     from crawler.clean.text import drop_page_numbers
 
     assert drop_page_numbers("ก\n<page_number>10</page_number>\nข\n  <page_number> 3 </page_number>\nค") == "ก\nข\nค"
+
+
+def test_hard_wrapped_needs_many_short_lines():
+    assert hard_wrapped("\n".join(["ก" * 20] * 60))
+    assert not hard_wrapped("\n".join(["ก" * 20] * 10))
+    assert not hard_wrapped("\n".join(["ก" * 200] * 60))
+
+
+def test_unwrap_joins_runs_but_keeps_markers_and_blank_lines():
+    t = "| ก | ข |\n| ค | ง |\n2 : ไม่มีตัว Q\nQ5 :การยื่นแบบ\nภ.ง.ด.94 สำหรับปีภาษี\n2562\nA5\n:สามารถทำรายการ\nได้\n\nต่อไป\n1.\nInternet Explorer\n2.\nChrome\n- ข้อ\nย่อย"
+    assert unwrap_lines(t) == "| ก | ข |\n| ค | ง |\n2 : ไม่มีตัว Q\nQ5 :การยื่นแบบ ภ.ง.ด.94 สำหรับปีภาษี 2562\nA5 :สามารถทำรายการ ได้\n\nต่อไป\n1. Internet Explorer\n2. Chrome\n- ข้อ ย่อย"
+    assert "".join(unwrap_lines(t).split()) == "".join(t.split())
+
+
+def test_insert_headings_puts_each_heading_before_its_line_in_order():
+    t = "ก ต้น\nข ท่อน\nค ท้าย"
+    rows = [dict(page_id="p", heading="หนึ่ง", before="ก "), dict(page_id="p", heading="สอง", before="ค ")]
+    assert insert_headings(t, rows) == "## หนึ่ง\nก ต้น\nข ท่อน\n## สอง\nค ท้าย"
+
+
+def test_insert_headings_fails_loudly_when_the_anchor_moves():
+    with pytest.raises(ValueError, match="page p"):
+        insert_headings("ก ต้น\nข ท่อน", [dict(page_id="p", heading="x", before="ง ")])
+    with pytest.raises(ValueError):  # a heading cannot jump back before the one placed before it
+        insert_headings("ก ต้น\nข ท่อน", [dict(page_id="p", heading="x", before="ข "), dict(page_id="p", heading="y", before="ก ")])
