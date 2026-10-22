@@ -1,0 +1,286 @@
+{
+ "content": {
+  "n": 35,
+  "faithfulness": 0.8330612244897959,
+  "relevance": 0.7293230601719447,
+  "grounded": 1.8571428571428572,
+  "correct": 1.9142857142857144,
+  "useful": 1.6857142857142857,
+  "behaviour": {
+   "na": 35,
+   "yes": 0,
+   "no": 0
+  }
+ },
+ "by_category": {
+  "การลงทุนและทรัพย์สิน": {
+   "n": 2,
+   "faithfulness": 0.8333333333333333,
+   "relevance": 0.7935830354690552,
+   "grounded": 2.0,
+   "correct": 2.0,
+   "useful": 1.5,
+   "behaviour": {
+    "na": 2,
+    "yes": 0,
+    "no": 0
+   }
+  },
+  "กำหนดเวลาและแบบภาษี": {
+   "n": 2,
+   "faithfulness": 0.5,
+   "relevance": 0.6747561991214752,
+   "grounded": 2.0,
+   "correct": 2.0,
+   "useful": 1.5,
+   "behaviour": {
+    "na": 2,
+    "yes": 0,
+    "no": 0
+   }
+  },
+  "ครอบครัวและวางแผนภาษี": {
+   "n": 2,
+   "faithfulness": 1.0,
+   "relevance": 0.7911868691444397,
+   "grounded": 1.5,
+   "correct": 1.5,
+   "useful": 1.5,
+   "behaviour": {
+    "na": 2,
+    "yes": 0,
+    "no": 0
+   }
+  },
+  "คำถามหลายรอบ": {
+   "n": 3,
+   "faithfulness": 0.6,
+   "relevance": 0.7995654145876566,
+   "grounded": 1.6666666666666667,
+   "correct": 2.0,
+   "useful": 1.3333333333333333,
+   "behaviour": {
+    "na": 3,
+    "yes": 0,
+    "no": 0
+   }
+  },
+  "คำนวณภาษี": {
+   "n": 2,
+   "faithfulness": 0.7708333333333333,
+   "relevance": 0.8772633075714111,
+   "grounded": 1.5,
+   "correct": 1.5,
+   "useful": 2.0,
+   "behaviour": {
+    "na": 2,
+    "yes": 0,
+    "no": 0
+   }
+  },
+  "ค่าใช้จ่ายและค่าลดหย่อน": {
+   "n": 2,
+   "faithfulness": 0.875,
+   "relevance": 0.8191222548484802,
+   "grounded": 2.0,
+   "correct": 2.0,
+   "useful": 2.0,
+   "behaviour": {
+    "na": 2,
+    "yes": 0,
+    "no": 0
+   }
+  },
+  "ธุรกิจเล็กและขายออนไลน์": {
+   "n": 2,
+   "faithfulness": 0.6041666666666667,
+   "relevance": 0.782848060131073,
+   "grounded": 2.0,
+   "correct": 2.0,
+   "useful": 2.0,
+   "behaviour": {
+    "na": 2,
+    "yes": 0,
+    "no": 0
+   }
+  },
+  "นักศึกษาและคนเริ่มทำงาน": {
+   "n": 2,
+   "faithfulness": 0.5,
+   "relevance": 0.7689335644245148,
+   "grounded": 1.5,
+   "correct": 2.0,
+   "useful": 1.5,
+   "behaviour": {
+    "na": 2,
+    "yes": 0,
+    "no": 0
+   }
+  },
+  "พนักงานเงินเดือน": {
+   "n": 2,
+   "faithfulness": 1.0,
+   "relevance": 0.7221368551254272,
+   "grounded": 2.0,
+   "correct": 2.0,
+   "useful": 2.0,
+   "behaviour": {
+    "na": 2,
+    "yes": 0,
+    "no": 0
+   }
+  },
+  "พื้นฐานภาษี": {
+   "n": 2,
+   "faithfulness": 1.0,
+   "relevance": 0.7968292236328125,
+   "grounded": 2.0,
+   "correct": 2.0,
+   "useful": 2.0,
+   "behaviour": {
+    "na": 2,
+    "yes": 0,
+    "no": 0
+   }
+  },
+  "ฟรีแลนซ์และรายได้เสริม": {
+   "n": 2,
+   "faithfulness": 1.0,
+   "relevance": 0.8019704520702362,
+   "grounded": 2.0,
+   "correct": 1.5,
+   "useful": 1.5,
+   "behaviour": {
+    "na": 2,
+    "yes": 0,
+    "no": 0
+   }
+  },
+  "ภาษาพูด": {
+   "n": 2,
+   "faithfulness": 0.8035714285714286,
+   "relevance": 0.7174137234687805,
+   "grounded": 1.5,
+   "correct": 2.0,
+   "useful": 2.0,
+   "behaviour": {
+    "na": 2,
+    "yes": 0,
+    "no": 0
+   }
+  },
+  "ยื่นภาษีออนไลน์และเอกสาร": {
+   "n": 2,
+   "faithfulness": 1.0,
+   "relevance": 0.7644256949424744,
+   "grounded": 2.0,
+   "correct": 2.0,
+   "useful": 1.0,
+   "behaviour": {
+    "na": 2,
+    "yes": 0,
+    "no": 0
+   }
+  },
+  "รายได้ข้ามประเทศ": {
+   "n": 2,
+   "faithfulness": 0.875,
+   "relevance": 0.39555010199546814,
+   "grounded": 2.0,
+   "correct": 2.0,
+   "useful": 2.0,
+   "behaviour": {
+    "na": 2,
+    "yes": 0,
+    "no": 0
+   }
+  },
+  "หลายแหล่งรายได้และสถานการณ์ชีวิต": {
+   "n": 2,
+   "faithfulness": 0.9166666666666667,
+   "relevance": 0.7270948886871338,
+   "grounded": 2.0,
+   "correct": 2.0,
+   "useful": 2.0,
+   "behaviour": {
+    "na": 2,
+    "yes": 0,
+    "no": 0
+   }
+  },
+  "หัก ณ ที่จ่ายและคืนภาษี": {
+   "n": 2,
+   "faithfulness": 1.0,
+   "relevance": 0.4177253246307373,
+   "grounded": 2.0,
+   "correct": 2.0,
+   "useful": 1.5,
+   "behaviour": {
+    "na": 2,
+    "yes": 0,
+    "no": 0
+   }
+  },
+  "ไม่ยื่นหรือยื่นผิด": {
+   "n": 2,
+   "faithfulness": 1.0,
+   "relevance": 0.7129658758640289,
+   "grounded": 2.0,
+   "correct": 2.0,
+   "useful": 1.5,
+   "behaviour": {
+    "na": 2,
+    "yes": 0,
+    "no": 0
+   }
+  }
+ },
+ "behavioural": {
+  "ask_back": {
+   "n": 2,
+   "faithfulness": 0.8333333333333333,
+   "relevance": 0.7965312302112579,
+   "grounded": 1.5,
+   "correct": 2.0,
+   "useful": 2.0,
+   "behaviour": {
+    "na": 0,
+    "yes": 2,
+    "no": 0
+   }
+  },
+  "misconception": {
+   "n": 2,
+   "faithfulness": 0.9,
+   "relevance": 0.7499225437641144,
+   "grounded": 1.5,
+   "correct": 2.0,
+   "useful": 2.0,
+   "behaviour": {
+    "na": 0,
+    "yes": 2,
+    "no": 0
+   }
+  },
+  "out_of_scope": {
+   "n": 1,
+   "faithfulness": 1.0,
+   "relevance": 0.7195451855659485,
+   "grounded": 2.0,
+   "correct": 2.0,
+   "useful": 2.0,
+   "behaviour": {
+    "na": 0,
+    "yes": 1,
+    "no": 0
+   }
+  }
+ },
+ "tags": {
+  "retrieval_miss": 10,
+  "outdated": 2,
+  "unsupported": 2,
+  "needless_refusal": 1,
+  "ignored_source": 1
+ }
+}
