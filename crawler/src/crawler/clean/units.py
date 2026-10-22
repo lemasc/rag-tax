@@ -187,3 +187,63 @@ def split_statute(doc_id: str, text: str) -> tuple[str, list[Unit]]:
         flags = ["has_repeal_note"] if any(n["type"] == "repeal" for n in notes) else []
         units.append(Unit(f"{doc_id}#{k + 1:03d}", doc_id, "statute", label, "\n".join(body).rstrip(), flags=flags, notes=notes))
     return "\n".join(lines[: bounds[0]]).strip(), units
+
+
+# ---------------------------------------------------------------- filling guides (OCR with markdown headings)
+
+HEADING = re.compile(r"^(#{1,6})\s+(.*\S)\s*$")
+BOLD_HEADING = re.compile(r"^\*\*([^*\n]{2,100})\*\*$")  # a line that is only bold: "**ข้อ 4 รายการเงินได้พึงประเมินตามมาตรา 40 (5)**"
+BOLD_LEVEL = 7  # below every `#` level, so a bold heading is a child of the heading above it
+ITEM = re.compile(r"ข้อ\s*\d+")
+ITEM_LEVEL = 2
+GUIDE_MIN_CHARS = 300  # a section shorter than this is joined with the one after it
+
+
+def _heading(line: str) -> tuple[int, str] | None:
+    if m := HEADING.match(line):
+        level, title = len(m[1]), m[2]
+    elif m := BOLD_HEADING.match(line):
+        level, title = BOLD_LEVEL, m[1]
+    else:
+        return None
+    title = re.sub(r"^[•\s]+|\*\*", "", title).strip()
+    return (ITEM_LEVEL if ITEM.match(title) else level), title  # the OCR gives "ข้อ N" lines `##`, bold or `#` at random
+
+
+def split_guide(doc_id: str, text: str) -> tuple[str, list[Unit]]:
+    """Return (preamble, units): one unit per heading section of a Typhoon-OCR filling guide (ภ.ง.ด.90/91/94).
+
+    Boundaries are `#` headings and lines that are only bold; the OCR marks few of them (8-17 per guide), so a section
+    can still be long and the chunker windows it. The heading trail ("วิธีกรอก... > ข้อ 3 ... > 2. เงินส่วนแบ่ง...") is
+    the unit's `section`, the section's own heading its `label`. A section under GUIDE_MIN_CHARS (a heading followed
+    at once by a sub-heading, a one-line item) takes in the section after it, whose heading stays in the text as a line.
+    """
+    secs: list[dict] = []  # {"section", "label", "head", "lines"}
+    trail: list[tuple[int, str]] = []
+    pre: list[str] = []
+    for line in text.split("\n"):
+        h = _heading(line)
+        if h is None:
+            (secs[-1]["lines"] if secs else pre).append(line)
+            continue
+        while trail and trail[-1][0] >= h[0]:
+            trail.pop()
+        secs.append(dict(section=" > ".join(t for _, t in trail) or None, label=h[1], head=line.strip(), lines=[]))
+        trail.append(h)
+
+    merged: list[dict] = []
+    for s in secs:
+        if merged and len("\n".join(merged[-1]["lines"]).strip()) < GUIDE_MIN_CHARS:
+            merged[-1]["lines"] += [s["head"], *s["lines"]]
+        else:
+            merged.append(dict(s, lines=list(s["lines"])))
+    if len(merged) > 1 and len("\n".join(merged[-1]["lines"]).strip()) < GUIDE_MIN_CHARS:
+        last = merged.pop()
+        merged[-1]["lines"] += [last["head"], *last["lines"]]
+
+    units = [
+        Unit(unit_id=f"{doc_id}#{i:03d}", doc_id=doc_id, type="guide", label=s["label"], section=s["section"],
+             text=re.sub(r"\n{3,}", "\n\n", "\n".join(s["lines"])).strip())
+        for i, s in enumerate(merged, 1)
+    ]
+    return "\n".join(pre).strip(), units

@@ -22,7 +22,7 @@ from crawler.clean.gazette import strip_page_headers
 from crawler.clean.pages import take_page_anchors
 from crawler.clean.rejoin import fix_tone_marks, rejoin
 from crawler.clean.text import drop_empty_cells, normalize
-from crawler.clean.units import split_faq, split_statute
+from crawler.clean.units import split_faq, split_guide, split_statute
 
 DATA = Path("data")
 OUT = DATA / "clean"
@@ -89,10 +89,10 @@ def legal_docs() -> list[dict]:
     return docs
 
 
-def guide_docs() -> list[dict]:
+def guide_docs() -> tuple[list[dict], list[dict]]:
     """One document per `legal_catalog.csv` row of kind คู่มือกรอกแบบ, from its OCR in data/raw/pit2568/ocr (not in data/text/legal:
     these guides were OCR'd outside the crawler flow and are not cited by the Code, so legal_core never sees them)."""
-    docs = []
+    docs, units = [], []
     for r in csv.DictReader((DATA / "legal_catalog.csv").open(encoding="utf-8")):
         if r["kind"] != GUIDE_KIND:
             continue
@@ -103,13 +103,15 @@ def guide_docs() -> list[dict]:
         text, joins = rejoin(drop_empty_cells(normalize(path.read_text(encoding="utf-8"))))
         text, pages = take_page_anchors(text)
         year = re.search(r"ปีภาษี\s*(25\d\d)", r["title"])
+        preamble, us = split_guide(stem, text)
         docs.append(dict(
             doc_id=stem, source="legal", url=r["url"], kind=GUIDE_KIND, role="content", include=True, scope=None, pit_clauses=None,
             title=r["title"], breadcrumb=[], last_update=None, tax_year=int(year[1]) if year else None, year=None,
-            text_method="ocr", preamble="", n_units=0, n_chars=len(text), flags=[], text=text,
+            text_method="ocr", preamble=preamble, n_units=len(us), n_chars=len(text), flags=[], text=text,
             gazette_date=None, n_header_lines_removed=0, n_joins=len(joins), n_tone_fixes=0, pages=pages,
         ))
-    return docs
+        units += [u.to_dict() for u in us]
+    return docs, units
 
 
 def image_docs() -> list[dict]:
@@ -155,7 +157,9 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     docs, units = page_docs()
     docs += legal_docs()
-    docs += guide_docs()
+    guide, guide_units = guide_docs()
+    docs += guide
+    units += guide_units
     docs += image_docs()
     decisions_path = DATA / "unit_decisions.csv"
     if decisions_path.exists():
