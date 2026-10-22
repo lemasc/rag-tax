@@ -73,6 +73,7 @@ def test_strip_position_rises_and_keeps_a_zone_for_each_part_of_the_ranking():
     xs = [strip_position(r) for r in range(1, 101)]
     assert xs == sorted(xs) and 0 < xs[0] and xs[-1] < 100
     assert strip_position(5) < 25 < strip_position(6) and strip_position(50) < 75 < strip_position(51)
+    assert strip_position(100) < strip_position(None) < 100  # outside the pool: the far end
 
 
 def test_depth_labels_round_trip_and_a_second_save_replaces_the_first(tmp_path, monkeypatch):
@@ -86,6 +87,41 @@ def test_depth_labels_round_trip_and_a_second_save_replaces_the_first(tmp_path, 
     assert depth.human_grades(["ann"]) == {("Q1", "c1"): 2}
     assert depth.human_grades(["ann", "bob", "cy"]) == {("Q1", "c1"): 2}  # median of 2, 0, 2
     assert depth.human_grades(["ann", "bob"]) == {("Q1", "c1"): 0}  # even: the lower middle
+
+
+def test_round_2_labels_go_to_their_own_file(tmp_path, monkeypatch):
+    from rag import depth, labels
+
+    monkeypatch.setattr(labels, "LABELS", tmp_path)
+    depth.save_depth_label("ann", "Q1", "c1", 1, "")
+    depth.save_depth_label("ann", "Q1", "c1", 2, "", rnd=2)
+    assert depth.human_grades(["ann"]) == {("Q1", "c1"): 1} and depth.human_grades(["ann"], rnd=2) == {("Q1", "c1"): 2}
+    assert (tmp_path / "ann" / "depth_r2.csv").exists()
+
+
+def test_round2_candidates_keep_pool_entries_and_put_chunks_outside_the_pool_last(monkeypatch):
+    from rag import depth
+
+    monkeypatch.setattr(depth, "ROUND2", {"Q1": ["out", "b", "a"]})
+    items = {"Q1": {"pool": [dict(chunk_id="a", hybrid_rank=30), dict(chunk_id="b", hybrid_rank=12)]}}
+    cs = depth.round2_candidates(items)["Q1"]
+    assert [e["chunk_id"] for e in cs] == ["b", "a", "out"] and cs[2]["hybrid_rank"] is None
+
+
+@pytest.mark.parametrize("r1, r2, cls", [
+    (("found", dict(hybrid_rank=3)), None, "A"),
+    (("found", dict(hybrid_rank=9)), ("none", None), "B"),  # round 2 never overrides a round-1 answer
+    (("pending", {}), None, None),
+    (("none", None), None, "D"),
+    (("none", None), ("pending", {}), None),
+    (("none", None), ("none", None), "D"),
+    (("none", None), ("found", dict(hybrid_rank=27)), "B"),
+    (("none", None), ("found", dict(hybrid_rank=None)), "C"),  # outside the pool counts as below rank 50
+])
+def test_final_class_over_both_rounds(r1, r2, cls):
+    from rag.depth import final_class
+
+    assert final_class(r1, r2) == cls
 
 
 def test_next_pending_goes_to_the_next_unresolved_question_and_wraps():

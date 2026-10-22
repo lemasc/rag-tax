@@ -51,6 +51,17 @@ KS = (5, 10, 20, 50)
 CLASSES = "ABCD"
 CANDIDATES = 3  # chunks a person grades per question, at most
 DEPTH_FIELDS = ["question_id", "chunk_id", "relevance", "note", "labelled_at"]
+LABEL_FILES = {1: "depth.csv", 2: "depth_r2.csv"}  # one file per round of the human check
+# Round 2 (added after round 1): chunks no one graded for the questions round 1 left at D. In the pool, the panel gave
+# them a 2 but round 1 stopped at three candidates; outside it, a keyword search over every chunk found them.
+ROUND2 = {
+    "Q0078": ["62149#005", "551~001"],
+    "Q0223": ["63908#008"],
+    "Q0240": ["553~001"],
+    "Q0301": ["552~001", "c14fb88f7fbe~001"],
+    "Q0329": ["555~002", "5937#042"],
+}
+OUTSIDE = 101  # the rank a chunk outside the pool counts as: below the top 50 of both rankings
 
 SYSTEM = f"""คุณเป็นผู้ตรวจว่าเอกสารแต่ละฉบับตอบคำถามภาษีเงินได้บุคคลธรรมดาของไทยได้หรือไม่
 ปีภาษีล่าสุดที่ใช้ตัดสินว่าตัวเลขเป็น "ปัจจุบัน" คือ {evaluate.CURRENT_TAX_YEAR}
@@ -248,15 +259,42 @@ def status(cands: list[dict], human: dict[str, int]) -> tuple[str, dict | None]:
     return "none", None
 
 
-def read_depth_labels(reviewer: str) -> dict[tuple[str, str], dict]:
-    return {(r["question_id"], r["chunk_id"]): r for r in labels._read(labels.LABELS / reviewer / "depth.csv")}
+def round2_candidates(items: dict[str, dict]) -> dict[str, list[dict]]:
+    """Round 2's chunks per question, best rank first: the pool entry, or for a chunk outside the pool an entry with
+    no ranks (hybrid_rank None)."""
+    out = {}
+    for q, ids in ROUND2.items():
+        pool = {e["chunk_id"]: e for e in items[q]["pool"]}
+        es = [pool.get(c, dict(chunk_id=c, hybrid_rank=None, dense_rank=None, sparse_rank=None, returned=False)) for c in ids]
+        out[q] = sorted(es, key=lambda e: e["hybrid_rank"] or OUTSIDE)
+    return out
 
 
-def human_grades(reviewers: list[str]) -> dict[tuple[str, str], int]:
+def final_class(r1: tuple[str, dict | None], r2: tuple[str, dict | None] | None) -> str | None:
+    """A question's class over both rounds, from each round's `status` (r2 None: round 2 has no chunk for it);
+    None while a chunk it depends on is still to grade."""
+    st, e = r1
+    if st == "found":
+        return classify(e["hybrid_rank"])
+    if st == "pending":
+        return None
+    if r2 is None:
+        return "D"
+    st, e = r2
+    if st == "pending":
+        return None
+    return classify(e["hybrid_rank"] or OUTSIDE) if st == "found" else "D"
+
+
+def read_depth_labels(reviewer: str, rnd: int = 1) -> dict[tuple[str, str], dict]:
+    return {(r["question_id"], r["chunk_id"]): r for r in labels._read(labels.LABELS / reviewer / LABEL_FILES[rnd])}
+
+
+def human_grades(reviewers: list[str], rnd: int = 1) -> dict[tuple[str, str], int]:
     """{(question, chunk): grade}: the median of the reviewers' grades, the lower middle for an even number."""
     by: dict[tuple[str, str], list[int]] = {}
     for r in reviewers:
-        for key, row in read_depth_labels(r).items():
+        for key, row in read_depth_labels(r, rnd).items():
             if row["relevance"] != "":
                 by.setdefault(key, []).append(int(row["relevance"]))
     return {k: median(v) for k, v in by.items()}
@@ -277,22 +315,24 @@ def next_pending(cands: dict[str, list[dict]], grades: dict[tuple[str, str], int
     return next((p for p in pend if order.index(p) > pos), pend[0])
 
 
-def save_depth_label(reviewer: str, question_id: str, chunk_id: str, relevance: int, note: str) -> None:
-    path = labels.LABELS / reviewer / "depth.csv"
+def save_depth_label(reviewer: str, question_id: str, chunk_id: str, relevance: int, note: str, rnd: int = 1) -> None:
+    path = labels.LABELS / reviewer / LABEL_FILES[rnd]
     rows = [r for r in labels._read(path) if (r["question_id"], r["chunk_id"]) != (question_id, chunk_id)]
     rows.append(dict(question_id=question_id, chunk_id=chunk_id, relevance=relevance, note=note.strip(),
                      labelled_at=time.strftime("%Y-%m-%dT%H:%M:%S%z")))
     labels._write(path, DEPTH_FIELDS, rows)
 
 
-def strip_position(rank: int) -> float:
+def strip_position(rank: int | None) -> float:
     """Where a hybrid rank sits on a 0-100 strip. Ranks 1-5 (what the generator saw) get a quarter of it, 6-50 half,
-    51 and below the last quarter, so the part that matters stays readable."""
+    51 and below the last quarter, so the part that matters stays readable. None (outside the pool) is the far end."""
+    if rank is None:
+        return 99.0
     if rank <= 5:
         return (rank - 0.5) / 5 * 25
     if rank <= 50:
         return 25 + (rank - 5.5) / 45 * 50
-    return 75 + (min(rank, 100) - 50.5) / 50 * 25
+    return 75 + (min(rank, 100) - 50.5) / 50 * 22  # stops short of the end, which is kept for outside the pool
 
 
 # ---------------------------------------------------------------- run
