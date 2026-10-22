@@ -94,7 +94,7 @@ Behavioural questions are scored on behaviour only (did it ask back, correct the
 |---|---|---|
 | Retrieval (required) | dense, sparse, hybrid | qrels metrics, then faithfulness and rubric with one fixed generator |
 | Generator | a small open model (Qwen or Gemma, about 8B), a mid-size open model, a small GPT model | faithfulness, relevance, rubric; per category, especially calculation and behavioural |
-| Later candidates | PIT scope filter on/off; chunk size 256 / 384 / 512; tax-year handling (prefer the newest source); a cross-encoder reranker; LLM query rewriting for multi-turn | as above |
+| Later candidates | PIT scope filter on/off; chunk size 256 / 384 / 512 (needs qrels that survive re-chunking: chunk-id qrels do not); tax-year handling (prefer the newest source); a cross-encoder reranker; LLM query rewriting for multi-turn | as above |
 
 Report per category, not only the mean: the corpus gaps (freelance, crypto) and the tax-year problem will show up as specific categories, which is the failure-analysis slide.
 
@@ -110,18 +110,19 @@ Done: `.env.example`, `llm.py`, `questions.py`; `answer.py` and `demo.py` on the
 
 Next (revised 2026-10-22, after the top-50 diagnostic). No tuning on the 13 miss questions: they are dev questions read closely, so a setting chosen to rescue them would look better than it is. What they suggest goes into the full-run ablations instead.
 
-1. **Chunk fix**, the one already planned (Q0145's `558~002` is a cut chunk). First, because qrels are keyed by chunk id. If sources are added for the corpus gaps (see *Open decisions*), they go in here too, in the same re-index.
-2. **Qrels:** the panel's chunk grades as a first pass, with a person confirming each 2. The panel alone is too lenient on hard questions (people kept 25 of 132 of its 2s).
-3. **Full run, retrieval ablation:** dense, sparse, hybrid (required). A cross-encoder reranker and k = 10 as candidates, justified by 7 of 13 misses having an answering chunk at ranks 6–50.
-4. **Generator ablation**, as planned.
-5. **Failure analysis:** corpus gaps (Q0111 general mutual-fund gains, Q0145 documents for a first online filing), a likely wording mismatch (Q0223, a case for query rewriting), a generation failure with the answer in the top 5 (Q0272), and the category breakdown.
+1. **Corpus fixes, as needed:** the cut chunk (Q0145's `558~002`), and sources for the corpus gaps if that is decided (see *Open decisions*).
+2. **Settle chunking and write down why.** The assignment asks for a justified chunk size. The argument comes from the corpus, not from a retrieval score: bge-m3 token counts of the natural units (FAQ items, statute sections, legal clauses) and how many fit whole under the cap (`rag-baseline.md`: 597 of 605 FAQ units and 36 of 43 sections fit in 512), plus what a window of the target size holds. The chunk ids are frozen after this step.
+3. **Qrels:** the panel's chunk grades as a first pass, with a person confirming each 2. The panel alone is too lenient on hard questions (people kept 25 of 132 of its 2s). Qrels are keyed by chunk id, which is why chunking is settled first; the round 1 and 2 labels of the top-50 diagnostic are kept for chunks whose text does not change (text hash).
+4. **Full run, retrieval ablation:** dense, sparse, hybrid (required). A cross-encoder reranker and k = 10 as candidates, justified by 7 of 13 misses having an answering chunk at ranks 6–50.
+5. **Generator ablation**, as planned.
+6. **Failure analysis:** corpus gaps (Q0111 general mutual-fund gains, Q0145 documents for a first online filing), a likely wording mismatch (Q0223, a case for query rewriting), a generation failure with the answer in the top 5 (Q0272), and the category breakdown.
 
 ## Open decisions
 
 - The generator list. The judge is decided (see *Judge panel*).
 - `ragas` library or a direct implementation.
 - Who labels the retrieval sample and grades the judge-validation sample, and how many questions each.
-- Whether to add sources for the corpus gaps the top-50 diagnostic confirmed (Q0111, Q0145) or only report them. Adding them changes chunk ids, so it belongs in the chunk-fix re-index; the round 1 and 2 labels are keyed by the old ids.
+- Whether to add sources for the corpus gaps the top-50 diagnostic confirmed (Q0111, Q0145) or only report them. Adding them adds chunks and can shift ids, so it belongs in step 1, before chunking is settled and qrels are made.
 - Whether to write reference answers for a small subset anyway. That would add BERTScore as a third metric, but it costs a person's time.
 
 ## Dev run 1 (2026-10-20)
