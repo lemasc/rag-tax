@@ -21,7 +21,7 @@ from crawler.clean import classify
 from crawler.clean.gazette import strip_page_headers
 from crawler.clean.pages import take_page_anchors
 from crawler.clean.rejoin import fix_tone_marks, rejoin
-from crawler.clean.text import drop_empty_cells, normalize
+from crawler.clean.text import drop_empty_cells, drop_page_numbers, normalize
 from crawler.clean.units import split_faq, split_guide, split_statute
 
 DATA = Path("data")
@@ -100,7 +100,7 @@ def guide_docs() -> tuple[list[dict], list[dict]]:
         path = GUIDE_OCR / f"{stem}.md"
         if not path.exists():
             raise SystemExit(f"{stem} is in legal_catalog.csv as {GUIDE_KIND} but {path} is missing")
-        text, joins = rejoin(drop_empty_cells(normalize(path.read_text(encoding="utf-8"))))
+        text, joins = rejoin(drop_page_numbers(drop_empty_cells(normalize(path.read_text(encoding="utf-8")))))
         text, pages = take_page_anchors(text)
         year = re.search(r"ปีภาษี\s*(25\d\d)", r["title"])
         preamble, us = split_guide(stem, text)

@@ -46,3 +46,12 @@ def drop_empty_cells(text: str) -> str:
     them and runs of three or more empty cells. One or two empty cells stay, since they can hold a column's place.
     Not part of `normalize`: only OCR documents with HTML tables need it."""
     return EMPTY_RUNS.sub("", EMPTY_ROWS.sub("", text))
+
+
+PAGE_NUMBER = re.compile(r"^[ \t]*<page_number>\s*\d*\s*</page_number>[ \t]*\n?", re.M)
+
+
+def drop_page_numbers(text: str) -> str:
+    """Remove the printed page number Typhoon marks as its own `<page_number>N</page_number>` line (76 in the three
+    2568 guides). The PDF page is already kept as a page anchor."""
+    return PAGE_NUMBER.sub("", text)

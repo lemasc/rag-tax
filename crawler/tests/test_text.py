@@ -68,3 +68,9 @@ def test_drop_empty_cells_keeps_a_cell_that_holds_a_column():
 
     html = "<tr><td>a</td><td></td><td>b</td></tr>\n<tr><td></td><td></td></tr>\n<tr><td>c</td><td></td><td></td><td></td><td></td></tr>"
     assert drop_empty_cells(html) == "<tr><td>a</td><td></td><td>b</td></tr>\n<tr><td>c</td></tr>"
+
+
+def test_drop_page_numbers_removes_only_the_marker_line():
+    from crawler.clean.text import drop_page_numbers
+
+    assert drop_page_numbers("ก\n<page_number>10</page_number>\nข\n  <page_number> 3 </page_number>\nค") == "ก\nข\nค"

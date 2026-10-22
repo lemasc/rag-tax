@@ -46,6 +46,26 @@ def test_text_before_the_first_heading_is_the_preamble():
     assert pre == "ภ.ง.ด.90" and len(units) == 1
 
 
+def test_numbered_headings_are_peers_whatever_the_ocr_marked():
+    text = f"## ข้อ 1 ก\n{BODY}\n## 5. ข\n{BODY}\n### 7. ค\n{BODY}\n# 10. ง\n{BODY}\n#### 10.1 จ\n{BODY}"
+    _, units = split_guide("d", text)
+    assert [(u.label, u.section) for u in units][1:] == [
+        ("5. ข", "ข้อ 1 ก"), ("7. ค", "ข้อ 1 ก"), ("10. ง", "ข้อ 1 ก"), ("10.1 จ", "ข้อ 1 ก > 10. ง")]
+
+
+def test_a_long_section_is_cut_at_its_own_decimal_items_only():
+    item = lambda n: f"7.{n} ข้อ {n}\n{BODY}\n\n"
+    text = f"## 7. เบี้ย\nนำ\n\n{item(1)}{item(2)}1.5 เท่า ของเงินได้\n{BODY * 8}\n\n{item(3)}"
+    _, units = split_guide("d", text)
+    assert [u.label for u in units] == ["7. เบี้ย", "7.2 ข้อ 2", "7.3 ข้อ 3"]  # 7.1 follows the intro lines, "1.5" is no item
+    assert units[1].section == "7. เบี้ย" and "1.5 เท่า" in units[1].text and units[0].text.startswith("นำ")
+
+
+def test_a_long_section_without_a_number_in_its_label_stays_whole():
+    _, units = split_guide("d", f"## ก การคำนวณ\n7.1 ก\n{BODY * 8}\n7.2 ข\n{BODY}")
+    assert len(units) == 1
+
+
 @pytest.mark.parametrize("stem", ["Ins90_241268", "Ins91_241268", "Ins94_050668"])
 def test_real_guides_lose_no_text(stem):
     path = DATA / "raw" / "pit2568" / "ocr" / f"{stem}.md"

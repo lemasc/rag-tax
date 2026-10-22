@@ -196,7 +196,13 @@ BOLD_HEADING = re.compile(r"^\*\*([^*\n]{2,100})\*\*$")  # a line that is only b
 BOLD_LEVEL = 7  # below every `#` level, so a bold heading is a child of the heading above it
 ITEM = re.compile(r"ข้อ\s*\d+")
 ITEM_LEVEL = 2
+NUMBERED = re.compile(r"\d+\.\s")
+NUMBERED_LEVEL = 3
+DECIMAL = re.compile(r"\d+\.\d+")
+DECIMAL_LEVEL = 4
 GUIDE_MIN_CHARS = 300  # a section shorter than this is joined with the one after it
+GUIDE_SPLIT_CHARS = 3000  # a section longer than this is cut at its decimal items ("7.1", "7.2")
+LABEL_NUMBER = re.compile(r"^(\d+(?:\.\d+)*)\.?\s")
 
 
 def _heading(line: str) -> tuple[int, str] | None:
@@ -207,7 +213,38 @@ def _heading(line: str) -> tuple[int, str] | None:
     else:
         return None
     title = re.sub(r"^[•\s]+|\*\*", "", title).strip()
-    return (ITEM_LEVEL if ITEM.match(title) else level), title  # the OCR gives "ข้อ N" lines `##`, bold or `#` at random
+    if ITEM.match(title):  # the OCR gives "ข้อ N" and "7." lines `#`, `##`, `###` or bold at random: one level for each kind
+        level = ITEM_LEVEL
+    elif DECIMAL.match(title):
+        level = DECIMAL_LEVEL
+    elif NUMBERED.match(title):
+        level = NUMBERED_LEVEL
+    return level, title
+
+
+def _split_decimal_items(secs: list[dict]) -> list[dict]:
+    """Cut a long section at its decimal items. A section numbered "7." only breaks at "7.N" lines ("7.1 การลดหย่อน...",
+    "7.2 ..."), so a figure like "1.5 เท่า" at the start of a line does not; a section whose label has no number is left
+    whole. The text before the first item stays with the section, each item becomes a child named after its number
+    and first words."""
+    out = []
+    for s in secs:
+        body = "\n".join(s["lines"])
+        m = LABEL_NUMBER.match(s["label"] + " ")
+        if len(body) <= GUIDE_SPLIT_CHARS or not m:
+            out.append(s)
+            continue
+        item = re.compile(rf"^({re.escape(m[1])}\.\d+(?:\.\d+)*)\.?\s+(.*)$")
+        cur = dict(s, lines=[])
+        parent = " > ".join(filter(None, [s["section"], s["label"]]))
+        for line in s["lines"]:
+            if im := item.match(line.strip()):
+                out.append(cur)
+                cur = dict(section=parent, label=f"{im[1]} {im[2][:60]}".strip(), head=s["head"], lines=[line])
+            else:
+                cur["lines"].append(line)
+        out.append(cur)
+    return out
 
 
 def split_guide(doc_id: str, text: str) -> tuple[str, list[Unit]]:
@@ -232,7 +269,7 @@ def split_guide(doc_id: str, text: str) -> tuple[str, list[Unit]]:
         trail.append(h)
 
     merged: list[dict] = []
-    for s in secs:
+    for s in _split_decimal_items(secs):
         if merged and len("\n".join(merged[-1]["lines"]).strip()) < GUIDE_MIN_CHARS:
             merged[-1]["lines"] += [s["head"], *s["lines"]]
         else:
