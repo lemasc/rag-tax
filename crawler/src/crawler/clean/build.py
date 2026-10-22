@@ -23,6 +23,7 @@ from crawler import images
 from crawler.clean import classify
 from crawler.clean.gazette import strip_page_headers
 from crawler.clean.pages import demote_headings, replace_pages, take_page_anchors
+from crawler.clean.tables import apply_table_decisions
 from crawler.clean.rejoin import fix_tone_marks, rejoin
 from crawler.clean.text import drop_empty_cells, drop_page_numbers, hard_wrapped, insert_headings, normalize, unwrap_lines
 from crawler.clean.units import split_faq, split_guide, split_instrument, split_statute
@@ -36,6 +37,14 @@ GUIDE_OCR = DATA / "text" / "guide"
 GUIDE_HEADINGS = DATA / "guide_heading_decisions.csv"  # keep/demote per OCR heading, from crawler.guide_headings
 PAGE_HEADINGS = DATA / "page_headings.csv"  # page_id, heading, before, source, note: headings that are pictures on the page (63437)
 GUIDE_OVERRIDES = DATA / "guide_overrides"  # <stem>/page-NN.md: hand-corrected text for a page the OCR misreads (checked in)
+TABLE_DECISIONS = DATA / "table_decisions.csv"  # doc, page, table, action, note: one row per HTML table in a guide's OCR or an image's text
+TABLE_OVERRIDES = DATA / "table_overrides"  # <doc>/page-NN-table-K.md: hand-written markdown for a table decided `manual` (checked in)
+
+
+
+def table_decisions(doc: str) -> list[dict]:
+    return [r for r in csv.DictReader(TABLE_DECISIONS.open(encoding="utf-8")) if r["doc"] == doc]
+
 
 # Source-side defects we know about and do not repair here. Keyed by doc_id; surfaced in `flags`.
 KNOWN_ISSUES: dict[str, str] = {}  # nothing outstanding; 60061 was fixed in parse._wrap_bare_inline
@@ -124,6 +133,7 @@ def guide_docs() -> tuple[list[dict], list[dict]]:
         overrides = {int(f.stem.removeprefix("page-")): f.read_text(encoding="utf-8") for f in sorted((GUIDE_OVERRIDES / stem).glob("page-*.md"))}
         raw, replaced = replace_pages(path.read_text(encoding="utf-8"), overrides)
         raw, _ = demote_headings(raw, [d for d in heading_rows if d["stem"] == stem])
+        raw = apply_table_decisions(raw, table_decisions(stem), TABLE_OVERRIDES / stem)
         text, joins = rejoin(drop_page_numbers(drop_empty_cells(normalize(raw))))
         text, pages = take_page_anchors(text)
         year = re.search(r"ปีภาษี\s*(25\d\d)", r["title"])
@@ -132,7 +142,7 @@ def guide_docs() -> tuple[list[dict], list[dict]]:
             doc_id=stem, source="legal", url=r["url"], kind=GUIDE_KIND, role="content", include=True, scope=None, pit_clauses=None,
             title=r["title"], breadcrumb=[], last_update=None, tax_year=int(year[1]) if year else None, year=None,
             text_method="ocr", preamble=preamble, n_units=len(us), n_chars=len(text),
-            flags=["manual_override:p" + ",".join(map(str, replaced))] if replaced else [], text=text,
+            flags=(["manual_override:p" + ",".join(map(str, replaced))] if replaced else []) + (["html_table"] if "<table" in text else []), text=text,
             gazette_date=None, n_header_lines_removed=0, n_joins=len(joins), n_tone_fixes=0, pages=pages,
         ))
         units += [u.to_dict() for u in us]
@@ -149,14 +159,14 @@ def image_docs() -> list[dict]:
         path = images.TEXT / f"{image_id}.md"
         if not path.exists():
             raise SystemExit(f"{image_id} is decided keep but {path} is missing: run `python -m crawler.images --ocr {image_id}`")
-        text = normalize(path.read_text(encoding="utf-8"))
+        text = normalize(apply_table_decisions(path.read_text(encoding="utf-8"), table_decisions(image_id), TABLE_OVERRIDES / image_id))
         heading = next((ln.lstrip("# ").strip() for ln in text.split("\n") if ln.startswith("#")), "")
         page_id = index[image_id]["page_id"]
         docs.append(dict(
             doc_id=image_id, source="image", url=f"https://www.rd.go.th/{page_id}.html", kind="image", role="content", include=True,
             title=d["title"] or heading or image_id, breadcrumb=[], last_update=None, tax_year=int(d["tax_year"]) if d["tax_year"] else None,  # set by hand: open item 5
             text_method="manual" if d["source"] == "manual" else "ocr", preamble="", n_units=0, n_chars=len(text),
-            flags=[] if d["verified"] else ["unverified"], text=text, n_joins=0, pages=None,
+            flags=([] if d["verified"] else ["unverified"]) + (["html_table"] if "<table" in text else []), text=text, n_joins=0, pages=None,
             parent_page=page_id, image_url=index[image_id]["url"], verified=d["verified"] or None,
         ))
     return docs

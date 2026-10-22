@@ -1,0 +1,16 @@
+doc,page,table,action,note
+Ins90_241268,3,1,convert,holding-years table of the real-estate lump-sum deduction: 2 rows x 9 cells; checked against p3
+Ins90_241268,17,1,manual,tax-rate table (ตารางที่ 1): a fill-in form; kept the printed brackets/rates/amounts and dropped the blank cells and the รวม row; checked against p17
+Ins90_241268,17,2,manual,expense-rate table for section 40(8) (ตารางที่ 2): two column-pairs in print and colspan/rowspan in the OCR; one row per item 1-44; checked against p17
+Ins90_241268,18,1,manual,dividend tax-credit worksheet (ตารางที่ 3): all blank except the credit fractions 3/97 .. 3/7; kept those only; checked against p18
+Ins90_241268,18,2,manual,party list (ตารางที่ 4): two column-pairs in print; one row per party; all 75 entries read against p18 (the heading says 76); OCR errors fixed
+Ins91_241268,15,1,manual,tax-rate table (ตารางที่ 1): same fill-in form as Ins90 p17; checked against p15
+Ins91_241268,15,2,manual,party list (ตารางที่ 2): same 75 entries as Ins90 p18; one row per party; checked against p15; OCR errors fixed
+Ins94_050668,2,1,convert,holding-years table in the hand-written page-02 override: 2 rows x 9 cells; checked against p2
+Ins94_050668,17,1,manual,tax-rate table (ตารางที่ 1): same fill-in form as Ins90 p17 but the first bracket prints "0 ถึง 150,000"; checked against p17
+Ins94_050668,17,2,manual,expense-rate table for section 40(8) (ตารางที่ 2): two column-pairs in print; one row per item 1-44; the OCR lost the 40 of item 1(ข); checked against p17
+62777_0_cc3,0,1,convert,life-insurance example: 5 rows x 2 cells; checked against the image
+62777_1_cc1,0,1,convert,life-insurance example: 6 rows x 2 cells; checked against the image
+62777_2_cc2,0,1,manual,donation-deduction examples: the OCR has a colspan row and ticks as symbols; one row per recipient with 1x/2x columns; checked against the image
+63437_4_csm_Tax-Refund,0,1,convert,refund-by-bank table: 3 rows x 3 cells; checked against the image
+66379_1_Q_A-Clear-Cut-_______________.docx,0,1,convert,gift-tax exemption table (section 42(26)-(29)): 5 rows x 6 cells; checked against the image
