@@ -79,3 +79,12 @@ Findings where AI output was wrong or needed correcting. One section per finding
 - **How it was caught:** the user saw missing columns in the CSV and suspected the server. `git diff` showed the two lost rows.
 - **Fix:** the CSV was restored from git (no value in the surviving rows had changed). `save_decisions` now writes a temporary file and replaces the original, so a failure leaves the old file; regression test `test_a_failed_save_leaves_the_decisions_file_intact`. A running notebook still needs a restart after `crawler/` code changes: `--watch` does not reload imported modules.
 - **Files:** `crawler/src/crawler/images.py`, `crawler/tests/test_images.py`
+
+## Judge scores from v1 were compared with v2 human labels
+
+- **What happened:** the saved dev-run scores were made by judge v1, before the v2 rubric (behaviour on behavioural questions only, the refusal rule). The human labels were v2. I ran `--compare` and reported the agreement (grounded 68%, correct 56%, useful 70%) and a conclusion built on it, without looking at `scores_config.json`, which said `judge_version: "v1"`. The comparison also pooled every complete label, including 21 made before v2 (81 pairs, not the 60 under v2).
+- **How it was caught:** the user asked whether the dev eval should be rerun under v2. Checking showed it had never been. The v2 re-score changed 7 of 40 grounded, 10 of 40 correct and 1 of 40 useful scores; agreement on the 60 v2 labels is grounded 72%, correct 67%, useful 70%.
+- **Related, in the same discussion:** I first said the panel would "reduce noise"; the judge was already as consistent with the humans as they were with each other, so I withdrew it (the reason is independence from the generator's family). I put Haiku's 559K input tokens down to retries; it made the same 161 calls as the other judges and its prompts are just long.
+- **Fix:** `--compare` uses only labels made under the current rubric and stops when the scores' judge version is not the labels' rubric version. `rag/panel.py` also refuses to combine judges scored under different versions.
+- **Files:** `rag/evaluate.py` (`compare`, `main`), `rag/panel.py` (`combine`), `docs/plans/generation-and-eval.md` (*Judge panel*)
+

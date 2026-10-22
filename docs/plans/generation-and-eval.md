@@ -19,7 +19,7 @@ Status: draft 2026-10-19. Steps 1–2 built 2026-10-20 (`rag/llm.py`, `rag/model
 
 ## Principles
 
-- **The judge is fixed.** One judge model, one prompt version, temperature 0, for every variant. It should be a different family from the generators and stronger than them. Changing it invalidates earlier numbers.
+- **The judge is fixed.** One judge panel (see *Judge panel*), one prompt version, for every variant. The judges should be a different family from the generators; changing any judge or the prompt invalidates earlier numbers.
 - **Every result file records its configuration:** model ids as served, base URL, prompt version, retrieval mode, k, chunk file hash, date.
 - **Cache every LLM call on disk** keyed by (model, messages, parameters), so re-runs and re-scoring are free and reproducible.
 - **Iterate on a dev subset** (about 40 questions, stratified by category); run all 369 only for reported numbers.
@@ -114,7 +114,7 @@ Report per category, not only the mean: the corpus gaps (freelance, crypto) and 
 
 ## Open decisions
 
-- Judge model (fixed for the project) and the generator list.
+- The generator list. The judge is decided (see *Judge panel*).
 - `ragas` library or a direct implementation.
 - Who labels the retrieval sample and grades the judge-validation sample, and how many questions each.
 - Whether to write reference answers for a small subset anyway. That would add BERTScore as a third metric, but it costs a person's time.
@@ -128,3 +128,44 @@ Report per category, not only the mean: the corpus gaps (freelance, crypto) and 
 - **One document fills all 5 slots.** Q0091 and Q0301 (foreign income) get five windows of ป.120/2545 (film crews); Q0327 gets five windows of ป.96/2543. ป.161/2566 and ป.162/2566 (foreign income, มาตรา 41 วรรคสอง), which answer Q0091, are in the corpus and not retrieved. A per-document cap on hits is a candidate fix and ablation.
 - **Calculation questions get old worked examples** (2542–2543 withholding orders) instead of the current rate table, and the answer declines to compute. Tax-year handling again.
 - The demo question on parents' allowance mixed the half-year ภ.ง.ด.94 amount (15,000) into the answer as if it were an older year's figure.
+
+## Judge panel (2026-10-22)
+
+Why a panel: on the 10 shared questions the four human reviewers agree exactly 57–66% of the time (grounded 62%, correct 58%, useful 57%, chunk relevance 66%), and rubric v2 did not change that. The single judge (`gpt-6-sol`) already agreed with the humans about as well as they agree with each other, so the panel is not for noise. It is for independence: the dev generator and the judge are both OpenAI, and one model cannot show its own family's bias. The panel is not ground truth; it is a judged reference validated against the human labels, and the report should say so.
+
+**Backends.** OpenRouter for the panel and the open generators (one key, one call shape, cached by `llm.py`); direct only for Typhoon and OpenAI. OpenRouter can route a model id to different hosts, so the served model is recorded with every call. New accounts are limited to 20 requests a minute on some models (Gemini 3.8 Flash); a profile may set its own `rpm`, throttled per model.
+
+**Bake-off.** Three candidates from other families scored the 40 dev answers under judge v2 (`rag/out/runs/<run>/judges/<profile>/`). Agreement with the 60 human answer labels made under rubric v2, exact:
+
+| Judge | grounded | correct | useful | relevance | mean grounded / correct |
+|---|---|---|---|---|---|
+| gpt-6-sol | 72% | 67% | 70% | 65% | 1.68 / 1.73 |
+| Haiku 5.5 | 73% | 48% | 70% | 66% | 1.77 / 1.55 |
+| DeepSeek V4.1 Flash | 77% | 73% | 68% | 70% | 1.85 / 1.90 |
+| Gemini 3.8 Flash | 78% (n=81, all labels) | 77% | 79% | 66% | 2.00 / 1.98 |
+| **Panel: sol, Haiku, DeepSeek** | 78% | 72% | 70% | 69% | |
+
+- Gemini is left out of the panel. Its mean is about 2.0 on grounded and correct: it gives nearly everything a 2, so its high agreement is leniency, and it cannot catch the old-figure cases `correct` exists for. It was only scored against all 81 labels, not the v2-only 60. It can come back as a fourth judge for flagging.
+- Haiku is the strictest on `correct` (mean 1.55, 48% agreement); the median keeps it from dominating.
+- All judges score higher than the humans on `correct` and `useful` (the panel about +0.2). Report it.
+- With n = 60, differences of about 5 points are noise.
+- Reasoning dominates the judges' output (DeepSeek 98% of 347K output tokens, about 2,100 per call). Left at the default: capping it changes the judge and means re-scoring and re-validating. Revisit if a full run is costly (about 9 times the dev run, so DeepSeek near 3M output tokens).
+
+**Aggregation (`rag/panel.py`, no LLM calls).** Median of grounded, correct, useful and each chunk's relevance; majority of behaviour (a tie goes to the more severe value) and of tags; mean of faithfulness and answer relevance. An answer is contested when two judges are two points apart on grounded, correct or useful: 2 of 40 on the dev run (Q0318 and Q0327, both on grounded), and the ones to give to a person. At least three judges, all scored under the same judge version.
+
+**Commands.**
+
+```
+uv run python -m rag.evaluate --judge judge-haiku      # one judge; judge-* profiles write to runs/<id>/judges/<profile>/
+uv run python -m rag.panel --judges judge judge-haiku judge-deepseek
+uv run python -m rag.evaluate --compare --judge panel  # against the human labels; v2 labels only
+```
+
+## Next pass: per-document cap
+
+The dev run showed one document filling all five slots (Q0091, Q0301, Q0327; see *Dev run 1*). Do it as a new run, not in the judging work: a cap changes which chunks come back, so it produces new answers, and the human labels belong to the old ones.
+
+1. Add a per-document cap to retrieval (a parameter in `retrieve.py`, off by default), try 2 hits per document.
+2. Generate a dev run with it next to the baseline; the run id carries the setting.
+3. Score both with the panel and compare faithfulness, answer relevance and the rubric, per category.
+4. Re-label by hand only the questions whose retrieved chunks changed; the other answers still have valid labels.
