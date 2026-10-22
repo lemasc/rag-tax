@@ -203,6 +203,10 @@ DECIMAL_LEVEL = 4
 GUIDE_MIN_CHARS = 300  # a section shorter than this is joined with the one after it
 GUIDE_SPLIT_CHARS = 3000  # a section longer than this is cut at its decimal items ("7.1", "7.2")
 LABEL_NUMBER = re.compile(r"^(\d+(?:\.\d+)*)\.?\s")
+# An item line the OCR did not mark (Ins91 writes "11." plain and "**11.2 เป็นดอกเบี้ย...** ..." bold run-in where Ins90 has
+# headings): a boundary only when its number counts up, so a figure ("1.5 เท่า") or a reference does not cut.
+ITEM_LINE = re.compile(r"^\**\s*(\d+)(?:\\?\.(\d+))?\\?\.?\s+\S")  # Typhoon sometimes escapes the dot: "1\\."
+TABLE = re.compile(r"^(?:#{1,6}\s*)?\**\s*(ตารางที่\s*\d+)\s*\**\s*$")  # "ตารางที่ 2": a printed table, its own unit
 
 
 def _heading(line: str) -> tuple[int, str] | None:
@@ -249,37 +253,71 @@ def _split_decimal_items(secs: list[dict]) -> list[dict]:
     return out
 
 
+def _item_line(line: str, number: int | None, sub: int) -> tuple[int, str, int, int] | None:
+    """(level, label, number, sub) for an unmarked item line that continues the count: "N." after item N-1 (or as the first
+    item under a ข้อ), "N.k" after N.(k-1) of the current item N."""
+    m = ITEM_LINE.match(line.strip())
+    if m is None:
+        return None
+    n, k = int(m[1]), int(m[2]) if m[2] else None
+    label = " ".join(line.replace("**", "").replace("\\.", ".").split())[:70]
+    if k is None and n == (number or 0) + 1:
+        return NUMBERED_LEVEL, label, n, 0
+    if k is not None and n == number and k == sub + 1:
+        return DECIMAL_LEVEL, label, n, k
+    return None
+
+
 def split_guide(doc_id: str, text: str, unit_type: str = "guide") -> tuple[str, list[Unit]]:
     """Return (preamble, units): one unit per heading section of a Typhoon-OCR filling guide (ภ.ง.ด.90/91/94).
 
-    Boundaries are `#` headings and lines that are only bold; the OCR marks few of them (8-17 per guide), so a section
-    can still be long and the chunker windows it. The heading trail ("วิธีกรอก... > ข้อ 3 ... > 2. เงินส่วนแบ่ง...") is
+    Boundaries are the guide's own structure, not only what the OCR marked: `#` headings and lines that are only bold, an
+    item line whose number counts up ("11.", "11.2 ...") whether it is marked or not, and a "ตารางที่ N" line, which starts
+    a unit of its own named after the table's title. The OCR marks headings differently in each guide (Ins90 has "11.1"
+    as a heading, Ins91 as a plain line), so cutting at the numbering is what makes the three guides' units line up. The heading trail ("วิธีกรอก... > ข้อ 3 ... > 2. เงินส่วนแบ่ง...") is
     the unit's `section`, the section's own heading its `label`. A section under GUIDE_MIN_CHARS (a heading followed
     at once by a sub-heading, a one-line item) takes in the section after it, whose heading stays in the text as a line.
-    `unit_type` names the units: "guide", or "section" for a page whose headings were inserted (`text.insert_headings`).
+    `unit_type` names the units: "guide", or "section" for a page whose headings were inserted (`text.insert_headings`);
+    unmarked item lines are boundaries in a guide only (a web page's numbered steps are a list, not sections). A table
+    is never joined to the short section before it.
     """
     secs: list[dict] = []  # {"section", "label", "head", "lines"}
     trail: list[tuple[int, str]] = []
     pre: list[str] = []
-    for line in text.split("\n"):
-        h = _heading(line)
-        if h is None:
+    number, sub = None, 0  # the item count under the current ข้อ
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        body: list[str] = []  # an unmarked item line is text as well as a boundary: it stays in its unit
+        if m := TABLE.match(line.strip()):
+            title = next((ln.strip() for ln in lines[i + 1 :] if ln.strip() and not ln.lstrip().startswith(("|", "<"))), "")
+            h = (ITEM_LEVEL, f"{m[1]} {title}"[:70].strip())
+            number, sub = None, 0
+        elif h := _heading(line):
+            if h[0] == ITEM_LEVEL:
+                number, sub = None, 0
+            elif im := LABEL_NUMBER.match(h[1] + " "):
+                parts = [int(x) for x in im[1].split(".")]
+                number, sub = parts[0], parts[1] if len(parts) > 1 else 0
+        elif unit_type == "guide" and (it := _item_line(line, number, sub)):
+            h, number, sub, body = it[:2], it[2], it[3], [line]
+        else:
             (secs[-1]["lines"] if secs else pre).append(line)
             continue
         while trail and (trail[-1][0] >= h[0] or h[0] == BOLD_LEVEL and trail[-1][0] > ITEM_LEVEL):  # unnumbered: under a ข้อ, not an item
             trail.pop()
-        secs.append(dict(section=" > ".join(t for _, t in trail) or None, label=h[1], head=line.strip(), lines=[]))
+        secs.append(dict(section=" > ".join(t for _, t in trail) or None, label=h[1], head="" if body else line.strip(), lines=body,
+                         table=bool(TABLE.match(line.strip()))))
         trail.append(h)
 
     merged: list[dict] = []
     for s in _split_decimal_items(secs):
-        if merged and len("\n".join(merged[-1]["lines"]).strip()) < GUIDE_MIN_CHARS:
-            merged[-1]["lines"] += [s["head"], *s["lines"]]
+        if merged and len("\n".join(merged[-1]["lines"]).strip()) < GUIDE_MIN_CHARS and not s.get("table"):
+            merged[-1]["lines"] += [h for h in [s["head"]] if h] + s["lines"]
         else:
             merged.append(dict(s, lines=list(s["lines"])))
     if len(merged) > 1 and len("\n".join(merged[-1]["lines"]).strip()) < GUIDE_MIN_CHARS:
         last = merged.pop()
-        merged[-1]["lines"] += [last["head"], *last["lines"]]
+        merged[-1]["lines"] += [h for h in [last["head"]] if h] + last["lines"]
 
     units = [
         Unit(unit_id=f"{doc_id}#{i:03d}", doc_id=doc_id, type=unit_type, label=s["label"], section=s["section"],

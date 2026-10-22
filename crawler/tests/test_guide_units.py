@@ -80,4 +80,36 @@ def test_real_guides_lose_no_text(stem):
     pre, units = split_guide(stem, text)
     assert len(units) > 10
     assert sum(len(u.text) for u in units) + len(pre) >= 0.95 * len(text)  # headings are the only text left out of unit bodies
-    assert all(len(u.text) >= GUIDE_MIN_CHARS for u in units)
+    before_table = {a.unit_id for a, b in zip(units, units[1:]) if b.label.startswith("ตารางที่")}  # a table is never joined to it
+    assert all(len(u.text) >= GUIDE_MIN_CHARS for u in units if u.unit_id not in before_table)
+
+
+def test_unmarked_item_lines_cut_when_they_count_up():
+    text = f"## 10. ก\n{BODY}\n11. ดอกเบี้ย\n{BODY}\n**11.1 จาก** ธนาคาร\n{BODY}\n1.5 เท่า\n{BODY}\n11.3 ข้าม\n{BODY}\n11.2 ต่อ\n{BODY}"
+    _, units = split_guide("d", text)
+    assert [u.label for u in units] == ["10. ก", "11. ดอกเบี้ย", "11.1 จาก ธนาคาร", "11.2 ต่อ"]  # 1.5 and 11.3 do not count up
+    assert units[2].section == "11. ดอกเบี้ย" and units[2].text.startswith("**11.1 จาก** ธนาคาร")  # the line stays as text
+
+
+def test_a_short_unmarked_item_is_joined_without_repeating_its_line():
+    _, units = split_guide("d", f"## 1. ก\n{BODY}\n2. สั้น\n## 3. ค\n{BODY}")
+    assert [u.label for u in units] == ["1. ก", "2. สั้น"] and units[1].text == f"2. สั้น\n## 3. ค\n{BODY}"
+
+
+def test_a_printed_table_is_its_own_unit_named_after_its_title():
+    text = f"## ข้อ 1 ก\n{BODY}\nตารางที่ 2\nตารางอัตราการหักค่าใช้จ่าย\n| ข้อ | ร้อยละ |\n| --- | --- |\n| 1 | 60 |\n{BODY}"
+    _, units = split_guide("d", text)
+    assert [(u.label, u.section) for u in units] == [("ข้อ 1 ก", None), ("ตารางที่ 2 ตารางอัตราการหักค่าใช้จ่าย", None)]
+    assert units[1].text.startswith("ตารางอัตราการหักค่าใช้จ่าย\n| ข้อ |")
+
+
+def test_a_table_is_not_swallowed_by_a_short_section_before_it():
+    text = f"## ข้อ 1 ก\n{BODY}\n**คำเตือน**\nสั้น\nตารางที่ 1\nตารางอัตราภาษี\n{BODY}"
+    _, units = split_guide("d", text)
+    assert [u.label for u in units] == ["ข้อ 1 ก", "คำเตือน", "ตารางที่ 1 ตารางอัตราภาษี"]
+
+
+def test_item_lines_are_boundaries_in_guides_only():
+    text = f"## ช่องทาง\n{BODY}\n1\\. ยื่นที่สำนักงาน\n{BODY}"
+    assert [u.label for u in split_guide("d", text)[1]] == ["ช่องทาง", "1. ยื่นที่สำนักงาน"]
+    assert [u.label for u in split_guide("d", text, unit_type="section")[1]] == ["ช่องทาง"]
