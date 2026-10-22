@@ -35,3 +35,14 @@ def normalize(text: str) -> str:
     t = t.replace("\u0e4d\u0e32", "\u0e33")  # sara am split into nikhahit + sara aa (pdftotext)
     lines = [re.sub(r"[ \t]+", " ", ln).strip() for ln in t.replace("\r", "").split("\n")]
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
+EMPTY_ROWS = re.compile(r"<tr>(?:\s*<td>\s*</td>)*\s*</tr>\s*")
+EMPTY_RUNS = re.compile(r"(?:<td>\s*</td>\s*){3,}")
+
+
+def drop_empty_cells(text: str) -> str:
+    """Remove the `<td></td>` padding Typhoon writes for blank table cells (176 in Ins90's OCR): rows with nothing in
+    them and runs of three or more empty cells. One or two empty cells stay, since they can hold a column's place.
+    Not part of `normalize`: only OCR documents with HTML tables need it."""
+    return EMPTY_RUNS.sub("", EMPTY_ROWS.sub("", text))

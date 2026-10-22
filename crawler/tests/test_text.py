@@ -61,3 +61,10 @@ def test_replacement_characters_become_spaces(pages):
     # U+FFFD comes from the source HTML: 20 in 61065 (where its duplicate 61081 has a space), 1 in 61117
     assert normalize("A7 :� 1.") == "A7 : 1."
     assert not any("�" in normalize(p["text"] or "") for p in pages.values())
+
+
+def test_drop_empty_cells_keeps_a_cell_that_holds_a_column():
+    from crawler.clean.text import drop_empty_cells
+
+    html = "<tr><td>a</td><td></td><td>b</td></tr>\n<tr><td></td><td></td></tr>\n<tr><td>c</td><td></td><td></td><td></td><td></td></tr>"
+    assert drop_empty_cells(html) == "<tr><td>a</td><td></td><td>b</td></tr>\n<tr><td>c</td></tr>"

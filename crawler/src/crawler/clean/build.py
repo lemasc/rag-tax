@@ -12,6 +12,7 @@ Run   : uv run python -m crawler.clean.build
 
 import csv
 import json
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -20,11 +21,14 @@ from crawler.clean import classify
 from crawler.clean.gazette import strip_page_headers
 from crawler.clean.pages import take_page_anchors
 from crawler.clean.rejoin import fix_tone_marks, rejoin
-from crawler.clean.text import normalize
+from crawler.clean.text import drop_empty_cells, normalize
 from crawler.clean.units import split_faq, split_statute
 
 DATA = Path("data")
 OUT = DATA / "clean"
+# Typhoon OCR of the 2568 filling guides (`~/san/ocr/typhoon_ocr_file.py`, copied here as <stem>.md and checked in).
+GUIDE_KIND = "คู่มือกรอกแบบ"
+GUIDE_TEXT = DATA / "text" / "guide"
 
 # Source-side defects we know about and do not repair here. Keyed by doc_id; surfaced in `flags`.
 KNOWN_ISSUES: dict[str, str] = {}  # nothing outstanding; 60061 was fixed in parse._wrap_bare_inline
@@ -84,6 +88,29 @@ def legal_docs() -> list[dict]:
     return docs
 
 
+def guide_docs() -> list[dict]:
+    """One document per `legal_catalog.csv` row of kind คู่มือกรอกแบบ, from its OCR in data/raw/pit2568/ocr (not in data/text/legal:
+    these guides were OCR'd outside the crawler flow and are not cited by the Code, so legal_core never sees them)."""
+    docs = []
+    for r in csv.DictReader((DATA / "legal_catalog.csv").open(encoding="utf-8")):
+        if r["kind"] != GUIDE_KIND:
+            continue
+        stem = r["url"].rsplit("/", 1)[-1].removesuffix(".pdf")
+        path = GUIDE_TEXT / f"{stem}.md"
+        if not path.exists():
+            raise SystemExit(f"{stem} is in legal_catalog.csv as {GUIDE_KIND} but {path} is missing")
+        text, joins = rejoin(drop_empty_cells(normalize(path.read_text(encoding="utf-8"))))
+        text, pages = take_page_anchors(text)
+        year = re.search(r"ปีภาษี\s*(25\d\d)", r["title"])
+        docs.append(dict(
+            doc_id=stem, source="legal", url=r["url"], kind=GUIDE_KIND, role="content", include=True, scope=None, pit_clauses=None,
+            title=r["title"], breadcrumb=[], last_update=None, tax_year=int(year[1]) if year else None, year=None,
+            text_method="ocr", preamble="", n_units=0, n_chars=len(text), flags=[], text=text,
+            gazette_date=None, n_header_lines_removed=0, n_joins=len(joins), n_tone_fixes=0, pages=pages,
+        ))
+    return docs
+
+
 def image_docs() -> list[dict]:
     """One document per image decided `keep` in data/image_decisions.csv (see crawler/images.py), from its exported OCR text."""
     index = {r["image_id"]: r for r in images.load_index()}
@@ -127,6 +154,7 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     docs, units = page_docs()
     docs += legal_docs()
+    docs += guide_docs()
     docs += image_docs()
     decisions_path = DATA / "unit_decisions.csv"
     if decisions_path.exists():
