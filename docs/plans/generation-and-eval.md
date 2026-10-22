@@ -169,3 +169,17 @@ The dev run showed one document filling all five slots (Q0091, Q0301, Q0327; see
 2. Generate a dev run with it next to the baseline; the run id carries the setting.
 3. Score both with the panel and compare faithfulness, answer relevance and the rubric, per category.
 4. Re-label by hand only the questions whose retrieved chunks changed; the other answers still have valid labels.
+
+## Top-50 diagnostic (2026-10-22)
+
+Question: for the dev questions tagged `retrieval_miss`, is a chunk that answers them in the candidates, and if so where? `rag/depth.py`; the class definitions are in its docstring.
+
+- **Questions:** the 13 content questions tagged `retrieval_miss` by a person or the panel on either dev run (Q0369, out of scope, is left out), and 10 control questions the panel scored 2/2/2 with no tag (a seeded sample).
+- **Pool:** every chunk the dense top 50 or the sparse top 50 found (the whole fused list, up to 100). Graded 0/1/2 by the three-judge panel in shuffled batches of 10, on the rubric's chunk-relevance scale.
+- **Classes** by the hybrid rank of the best chunk graded 2: A 1-5, B 6-50, C 51+, D none.
+- **Decided before the run:** if B and C together hold most of the miss questions, the next work is ranking (tax-year boost, reranker); if D holds most, it is the corpus and query wording; otherwise the report says mixed and the two are tried cheaply. 13 questions cannot tell a 7/6 split from a 6/7 one, so "most" means at least 9. Reported twice, a 2 meaning the panel median (lenient) and all three judges (strict); a conclusion that changes between the two is reported as unsure.
+- **Checks:** each D question and a sample of B ones are read by hand (a keyword search of the corpus for D); the controls show how often a 2 sits outside the top 5 for questions that worked; the new grades of the five returned chunks are compared with the panel's earlier relevance for the same chunks.
+- **Chunk ids:** the grades are keyed by chunk id with a text hash, so they survive the chunk fix only for chunks whose text does not change.
+- **Cost:** about 1,950 pairs, 206 calls per judge.
+
+**Human check (added after the first run).** On a hand read the panel's 2s were too lenient for the miss questions (the median grading gave A 9, B 4, D 0; the strict one A 6, B 7, D 0, and several of the "best" chunks did not answer the question). A person now grades, per miss question, the best-ranked chunk the panel median gave a 2, and the next (at most 3) only if that is not a 2: 13 decisions, more only when a chunk is rejected. `uv run marimo run rag/depth_review.py --token-password <password>`; labels in `rag/eval/labels/<name>/depth.csv`. The class of a question is then the hybrid rank of the first chunk a person graded 2, or D if none; the rule above applies to those classes. The panel's grade is not shown, so it cannot anchor the reviewer.

@@ -64,6 +64,14 @@ class Retriever:
     def sparse_scores(self, query: str) -> np.ndarray:
         return self.bm25.scores(tokenize(query))
 
+    def rankings(self, query: str) -> tuple[list[int], list[int], list[tuple[int, float]]]:
+        """The DEPTH best chunk indexes by dense and by sparse score (sparse ones with a score above 0), and their
+        fusion: (index, RRF score) for every chunk either ranking found, best first."""
+        s = self.sparse_scores(query)
+        sparse_rank = [i for i in top(s, DEPTH) if s[i] > 0]
+        dense_rank = top(self.dense_scores(query), DEPTH)
+        return dense_rank, sparse_rank, rrf([dense_rank, sparse_rank])
+
     def search(self, query: str, mode: str = "hybrid", k: int = 5, max_per_doc: int | None = None) -> list[dict]:
         """The k best chunks. With `max_per_doc`, a document gives at most that many, so one document cannot fill every
         slot; the cap is applied to the ranking (the best DEPTH candidates) before the cut to k."""
@@ -78,9 +86,7 @@ class Retriever:
             ranking = [i for i in top(s, max(depth, k)) if s[i] > 0]
             scored = {i: float(s[i]) for i in ranking}
         elif mode == "hybrid":
-            s = self.sparse_scores(query)
-            sparse_rank = [i for i in top(s, DEPTH) if s[i] > 0]
-            fused = rrf([top(self.dense_scores(query), DEPTH), sparse_rank])
+            _, _, fused = self.rankings(query)
             ranking, scored = [i for i, _ in fused], dict(fused)
         else:
             raise ValueError(f"mode must be one of {MODES}")
