@@ -1,0 +1,30 @@
+{
+ "run_id": "20261023-ablation-typhoon-dense-k10-v1-sr3",
+ "reference_run": null,
+ "scored": "2026-10-23T22:27:26+0700",
+ "judge_version": "v2",
+ "judge": {
+  "profile": "judge-deepseek",
+  "backend": "openrouter",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "base_url": "https://openrouter.ai/api/v1",
+  "params": {
+   "temperature": 0,
+   "max_tokens": 10000
+  }
+ },
+ "embed_model": "BAAI/bge-m3",
+ "relevance_n": 3,
+ "current_tax_year": 2568,
+ "n_scored": 130,
+ "not_scored": [
+  "Q0107"
+ ],
+ "failed_faithfulness": [
+  "Q0062",
+  "Q0074",
+  "Q0129"
+ ],
+ "new_prompt_tokens": 18155,
+ "new_completion_tokens": 13049
+}

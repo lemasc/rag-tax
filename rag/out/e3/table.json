@@ -1,0 +1,63 @@
+{
+ "n_common": 130,
+ "dropped": [
+  "Q0107"
+ ],
+ "skipped": [
+  "no retrieval"
+ ],
+ "rows": {
+  "dense k = 5 (baseline)": {
+   "run": "20261023-ablation-typhoon-dense-k5-v1-sr3",
+   "no_sources": false,
+   "all": {
+    "n": 130,
+    "grounded": 0.9153846153846154,
+    "correct": 1.1923076923076923,
+    "useful": 1.6692307692307693,
+    "behaviour_yes": null
+   },
+   "content": {
+    "n": 104,
+    "grounded": 0.8846153846153846,
+    "correct": 1.1442307692307692,
+    "useful": 1.6346153846153846,
+    "faithfulness": 0.5163772184877761,
+    "relevance": 0.7045159764014758
+   },
+   "behavioural": {
+    "n": 26,
+    "grounded": 1.0384615384615385,
+    "correct": 1.3846153846153846,
+    "useful": 1.8076923076923077,
+    "behaviour_yes": 19
+   }
+  },
+  "dense k = 10": {
+   "run": "20261023-ablation-typhoon-dense-k10-v1-sr3",
+   "no_sources": false,
+   "all": {
+    "n": 130,
+    "grounded": 0.9692307692307692,
+    "correct": 1.1615384615384616,
+    "useful": 1.623076923076923,
+    "behaviour_yes": null
+   },
+   "content": {
+    "n": 104,
+    "grounded": 0.9230769230769231,
+    "correct": 1.125,
+    "useful": 1.5865384615384615,
+    "faithfulness": 0.5598617196671588,
+    "relevance": 0.7051320935671146
+   },
+   "behavioural": {
+    "n": 26,
+    "grounded": 1.1538461538461537,
+    "correct": 1.3076923076923077,
+    "useful": 1.7692307692307692,
+    "behaviour_yes": 19
+   }
+  }
+ }
+}
