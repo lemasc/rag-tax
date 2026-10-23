@@ -5,7 +5,7 @@ import pytest
 
 from rag import llm
 from rag.evaluate import (agree, check_rubric, check_verdicts, conversation, faithfulness, human_gap, make_ask, relevance, rubric,
-                          summarise)
+                          score_record, summarise)
 
 
 class FakeReply:
@@ -109,6 +109,24 @@ def test_conversation_gives_earlier_turns_of_the_set_only():
     assert conversation(by_id["Q3"], by_id).count("บทสนทนาก่อนหน้า") == 2
     assert "q3" not in conversation(by_id["Q3"], by_id)
     assert conversation(dict(id="Q9", set=None, turn=None), by_id) == ""
+
+
+def test_reference_run_gives_the_rubric_its_sources_and_skips_faithfulness():
+    seen = []
+
+    def ask(messages, check):
+        seen.append(messages[1]["content"])
+        if "questions" in messages[0]["content"] and "noncommittal" in messages[0]["content"]:
+            return check(dict(questions=["q"], noncommittal=True)), [FakeReply()]
+        return check(dict(grounded=1, correct=2, useful=2, behaviour="na", relevance={"1": 2, "2": 0})), [FakeReply()]
+
+    chunks = {c: dict(chunk_id=c, kind="faq", header="", text=f"text {c}") for c in ("c1", "c2")}
+    r = dict(id="Q1", category="A", kind="normal", set=None, turn=None, question="q", answer="a", hits=[])
+    ref = dict(id="Q1", hits=[dict(chunk_id="c1"), dict(chunk_id="c2")])
+    s = score_record(ask, None, r, chunks, {"Q1": r}, ref)
+    assert s["faithfulness"]["score"] is None
+    assert s["rubric"]["relevance"] == {"1": 2, "2": 0}
+    assert len(seen) == 2 and "text c2" in seen[-1]
 
 
 def rec(kind, category, f, rel, g, behaviour="na", tags=()):

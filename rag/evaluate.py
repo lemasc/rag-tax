@@ -15,8 +15,13 @@ earlier scores. Calls are cached by rag.llm, so re-scoring is free. Faithfulness
 normal and multi-turn questions; behavioural questions (ask-back, misconception, out of scope) are summarised by
 the rubric's behaviour item, and their faithfulness/relevance are stored but kept out of the content table.
 
+A run without retrieval (`--mode none`) has no sources of its own: `--reference-run` gives the rubric another run's
+sources for the same questions (E3: the baseline's), so "correct" is judged against the same text in every variant.
+Faithfulness does not apply and is stored as None; "grounded" then means supported by the reference run's sources.
+
 Output: rag/out/runs/<run_id>/scores.jsonl, scores_config.json, scores_summary.json
 Run   : uv run python -m rag.evaluate [--run RUN_ID] [--limit N]    # default: the newest run
+        uv run python -m rag.evaluate --run NO_RETRIEVAL_RUN --reference-run BASELINE_RUN
         uv run python -m rag.evaluate --run RUN_ID --compare         # judge against the human labels
 """
 
@@ -211,9 +216,15 @@ def context_for(rec: dict, chunks: dict[str, dict], by_id: dict[str, dict]) -> s
     return f"เอกสารอ้างอิง\n\n{sources}{conversation(rec, by_id)}"
 
 
-def score_record(ask: Ask, embedder, rec: dict, chunks: dict, by_id: dict) -> dict:
-    context = context_for(rec, chunks, by_id)
-    f, r1 = faithfulness(ask, context, rec["answer"])
+def score_record(ask: Ask, embedder, rec: dict, chunks: dict, by_id: dict, ref: dict | None = None) -> dict:
+    """`ref`: the same question's record in a reference run, whose sources the rubric reads instead (no faithfulness)."""
+    if ref is None:
+        context = context_for(rec, chunks, by_id)
+        f, r1 = faithfulness(ask, context, rec["answer"])
+    else:
+        rec = rec | dict(hits=ref["hits"])
+        context = context_for(rec, chunks, by_id)
+        f, r1 = dict(score=None, claims=[], note="no sources of its own"), []
     rel, r2 = relevance(ask, embedder, rec["question"], rec["answer"])
     rub, r3 = rubric(ask, rec, context)
     new = [r.usage for r in r1 + r2 + r3 if not r.cached]
@@ -301,8 +312,12 @@ def out_dir(path: Path, judge_name: str) -> Path:
     return path if judge_name == JUDGE_PROFILE else path / "judges" / judge_name
 
 
-def evaluate(path: Path, judge_name: str = JUDGE_PROFILE, limit: int | None = None) -> list[dict]:
+def evaluate(path: Path, judge_name: str = JUDGE_PROFILE, limit: int | None = None, reference: Path | None = None) -> list[dict]:
     chunk_version.require(chunk_version.run_sha(path), f"run {path.name}")  # the judge reads the retrieved chunks' text
+    refs = None
+    if reference:
+        chunk_version.require(chunk_version.run_sha(reference), f"reference run {reference.name}")
+        refs = {r["id"]: r for r in read_jsonl(reference / "answers.jsonl")}
     judge = llm.profile(judge_name)
     ask = make_ask(judge)
     embedder = Embedder()
@@ -310,10 +325,12 @@ def evaluate(path: Path, judge_name: str = JUDGE_PROFILE, limit: int | None = No
     by_id = {r["id"]: r for r in records}
     chunks = {c["chunk_id"]: c for c in read_jsonl(OUT / "chunks.jsonl")}
     todo = [r for r in records if r["in_subset"]][:limit]
+    if refs is not None and (gone := [r["id"] for r in todo if r["id"] not in refs]):
+        raise SystemExit(f"reference run {reference.name} lacks {len(gone)} questions: {', '.join(gone[:10])}")
 
     def score(r: dict) -> dict | None:
         try:
-            return score_record(ask, embedder, r, chunks, by_id)
+            return score_record(ask, embedder, r, chunks, by_id, refs and refs[r["id"]])
         except ValueError as e:  # an unusable judge reply: keep the other answers, list this one in the config
             print(f"{judge_name}: {r['id']} not scored: {e}")
             return None
@@ -330,7 +347,7 @@ def evaluate(path: Path, judge_name: str = JUDGE_PROFILE, limit: int | None = No
     summary = summarise(scores)
     (out / "scores_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
     (out / "scores_config.json").write_text(json.dumps(dict(
-        run_id=path.name, scored=time.strftime("%Y-%m-%dT%H:%M:%S%z"), judge_version=JUDGE_VERSION,
+        run_id=path.name, reference_run=reference and reference.name, scored=time.strftime("%Y-%m-%dT%H:%M:%S%z"), judge_version=JUDGE_VERSION,
         judge=dict(profile=judge.name, backend=judge.backend, model=judge.model, base_url=judge.base_url, params=judge.params),
         embed_model=embedder.model_name, relevance_n=RELEVANCE_N, current_tax_year=CURRENT_TAX_YEAR, n_scored=len(scores), not_scored=not_scored,
         new_prompt_tokens=sum(s["judge_tokens"]["prompt"] for s in scores),
@@ -406,6 +423,7 @@ def main() -> None:
     ap.add_argument("--judge", default=JUDGE_PROFILE)
     ap.add_argument("--limit", type=int, help="score only the first N questions (a smoke test)")
     ap.add_argument("--compare", action="store_true", help="compare saved scores with the human labels; no judge calls")
+    ap.add_argument("--reference-run", help="for a run without retrieval: the run whose sources the rubric reads")
     a = ap.parse_args()
     path = run_dir(a.run)
     if a.compare:
@@ -415,7 +433,9 @@ def main() -> None:
         scores = [json.loads(ln) for ln in (out_dir(path, a.judge) / "scores.jsonl").read_text(encoding="utf-8").splitlines()]
         print_compare(compare(path, scores))
         return
-    scores = evaluate(path, a.judge, a.limit)
+    if not a.reference_run and not any(r["hits"] for r in read_jsonl(path / "answers.jsonl")):
+        raise SystemExit(f"run {path.name} has no sources; give --reference-run")
+    scores = evaluate(path, a.judge, a.limit, a.reference_run and run_dir(a.reference_run))
     print_summary(summarise(scores))
     out = out_dir(path, a.judge)
     cfg = json.loads((out / "scores_config.json").read_text(encoding="utf-8"))
