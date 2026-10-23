@@ -11,6 +11,7 @@ the earlier turns as a conversation (question and its own answer) and gets sourc
 Output: rag/out/runs/<run_id>/answers.jsonl (one record per question) and config.json
 Run   : uv run python -m rag.answer --subset dev --gen gpt-mini [--mode hybrid] [-k 5] [--max-per-doc 2]
         uv run python -m rag.answer --ids Q0045,Q0343 --gen gpt-mini
+        uv run python -m rag.answer --subset ablation --gen typhoon --mode dense   # E3 baseline
 """
 
 import argparse
@@ -25,7 +26,7 @@ from pathlib import Path
 from rag import llm
 from rag.chunk import OUT
 from rag.index import DEFAULT_MODEL
-from rag.questions import Question, dev, history, load
+from rag.questions import Question, ablation, dev, history, load
 from rag.retrieve import MODES
 
 PROMPT_VERSION = "v1"
@@ -177,7 +178,7 @@ def run(qs: list[Question], all_qs: list[Question], gen_name: str, mode: str, k:
 def main() -> None:
     ap = argparse.ArgumentParser()
     g = ap.add_mutually_exclusive_group(required=True)
-    g.add_argument("--subset", choices=("dev", "all"))
+    g.add_argument("--subset", choices=("dev", "ablation", "all"))
     g.add_argument("--ids", help="comma-separated question ids")
     ap.add_argument("--gen", default="gpt-mini", help="generator profile in rag/models.toml")
     ap.add_argument("--mode", choices=MODES, default="hybrid")
@@ -191,7 +192,7 @@ def main() -> None:
         if len(qs) != len(want):
             raise SystemExit(f"unknown ids: {sorted(set(want) - {q.id for q in qs})}")
     else:
-        qs, subset = (dev(all_qs) if a.subset == "dev" else all_qs), a.subset
+        qs, subset = {"dev": dev, "ablation": ablation, "all": lambda x: x}[a.subset](all_qs), a.subset
     out = run(qs, all_qs, a.gen, a.mode, a.k, subset, max_per_doc=a.max_per_doc)
     c = json.loads((out / "config.json").read_text(encoding="utf-8"))
     print(f"{c['n_answered']} answers -> {out}")

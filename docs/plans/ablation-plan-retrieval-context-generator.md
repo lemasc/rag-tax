@@ -356,3 +356,10 @@ Details: [`docs/experiments/2026-10-23-e2-neighbours/`](../experiments/2026-10-2
 - Budget is tight: luna replaces sol from E1b on if it passes the check in "Judge swap". Rules and outcome table written, and `rag/judge_swap.py` tested with haiku standing in for luna, before luna graded anything.
 - OpenRouter's key had $0.34 of its $8 daily limit left at the start, enough for about 500 of the 875 calls; the pass is ordered so a cutoff leaves a random sample of whole questions.
 - E3 revised: no-retrieval lower bound and a reranker (E1b) added; hybrid is the first variant to drop; the generator is an open model; E4 is optional.
+
+### E3 generator and baseline answers (2026-10-23)
+
+- Generator fixed: Typhoon (`typhoon-v2.5-30b-a3b-instruct`, profile `typhoon`), after the smoke test in `generation-and-eval.md`. A Qwen3-based model, from none of the judges' families.
+- Ablation subset drawn: `rag/eval/ablation_questions.txt`, `rag.questions.draw_ablation(seed=20261023)`, 131 questions (96 content, 6 from each of 16 categories; the 3 non-dev multi-turn sets, 9 turns; all 26 non-dev behavioural), none in dev.
+- Baseline generated, not yet scored: `rag/out/runs/20261023-ablation-typhoon-dense-k5-v1` (131 calls, 2m50s, 449k tokens in, 63k out, free). The 105 content questions got exactly E1's dense top 5; retrieval code is unchanged. 5 answers cite nothing, each a "ไม่พบข้อมูลนี้ในเอกสารอ้างอิง" on a retrieval miss (Q0119, Q0120, Q0244, Q0250, Q0260); one cites [6] of 5 sources (Q0334, turn 3 of a set).
+- Next: no-retrieval and k = 10 runs; scoring waits for the judge-swap decision.

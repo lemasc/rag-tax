@@ -50,3 +50,18 @@ def test_dev_draw_is_deterministic_and_matches_the_saved_subset(qs):
         assert [q.id for q in Q.dev(qs)] == ids
     sets = {q.set for q in qs if q.id in ids and q.set}
     assert len(sets) == 1 and sum(q.set in sets for q in qs if q.id in ids) == 3  # one whole set
+
+
+def test_ablation_draw_is_deterministic_leaves_out_dev_and_matches_the_saved_subset(qs):
+    dev_ids = set(Q.draw_dev(qs))
+    ids = Q.draw_ablation(qs, dev_ids)
+    assert ids == Q.draw_ablation(qs, dev_ids) and len(ids) == len(set(ids)) == 131 and not dev_ids & set(ids)
+    if Q.ABLATION.exists():
+        assert [q.id for q in Q.ablation(qs)] == ids
+    kinds = {}
+    for q in qs:
+        if q.id in ids:
+            kinds[q.kind] = kinds.get(q.kind, 0) + 1
+    assert kinds == {"normal": 96, "multi_turn": 9, "ask_back": 13, "misconception": 13}
+    for s in {q.set for q in qs if q.id in ids and q.set}:  # whole sets, so every turn has its earlier turns
+        assert all(q.id in ids for q in qs if q.set == s)
