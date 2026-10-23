@@ -43,7 +43,7 @@ def main() -> None:
     def ask(question: str) -> None:
         query = "\n".join([q for q, _ in turns] + [question])  # same multi-turn rule as rag.answer
         hits = retriever.search(query, a.mode, a.k)
-        text, _ = answer(gen, question, hits, turns)
+        text = answer(gen, question, hits, turns)[0]
         show(question, hits, text, a.show_context)
         turns.append((question, text))
 

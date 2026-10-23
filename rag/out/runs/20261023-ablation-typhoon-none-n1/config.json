@@ -1,0 +1,30 @@
+{
+ "run_id": "20261023-ablation-typhoon-none-n1",
+ "created": "2026-10-23T18:31:34+0700",
+ "git": "0f5244e+dirty",
+ "subset": "ablation",
+ "n_questions": 131,
+ "n_answered": 131,
+ "generator": {
+  "profile": "typhoon",
+  "backend": "typhoon",
+  "model": "typhoon-v2.5-30b-a3b-instruct",
+  "base_url": "https://api.opentyphoon.ai/v1",
+  "params": {
+   "temperature": 0,
+   "max_tokens": 2048
+  },
+  "served_models": [
+   "typhoon-v2.5-30b-a3b-instruct"
+  ]
+ },
+ "prompt_version": "n1",
+ "system_prompt": "คุณเป็นผู้ช่วยตอบคำถามเรื่องภาษีเงินได้บุคคลธรรมดาของไทย โดยอาศัยความรู้ของคุณเอง ไม่มีเอกสารอ้างอิงให้\n\nกติกา\n1. ถ้าไม่แน่ใจหรือไม่มีข้อมูลพอจะตอบ ให้บอกตรง ๆ อย่าเดา\n2. ถ้าคำถามขาดข้อมูลที่จำเป็นต่อคำตอบ (เช่น รายได้ทั้งปี ประเภทเงินได้ สถานะสมรส) ให้ถามกลับว่าต้องการข้อมูลใด และอธิบายหลักเกณฑ์ที่เกี่ยวข้องเท่าที่ทำได้\n3. ถ้าคำถามตั้งอยู่บนความเข้าใจผิด ให้ชี้แจงให้ถูกต้อง\n4. เมื่อให้ตัวเลข วงเงิน หรืออัตรา ให้บอกปีภาษีที่ตัวเลขนั้นใช้ด้วย\n5. ตอบเป็นภาษาไทย กระชับ ตรงประเด็น",
+ "retrieval": {
+  "mode": "none",
+  "chunks_sha": "f6caa7266653"
+ },
+ "new_calls": 131,
+ "prompt_tokens": 47122,
+ "completion_tokens": 75522
+}

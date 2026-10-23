@@ -124,3 +124,44 @@ def test_parse_json_finds_the_object(text):
 def test_parse_json_fails_loudly_without_an_object():
     with pytest.raises(ValueError, match="no JSON object"):
         llm.parse_json("คะแนน 4")
+
+
+def test_backend_rpm_is_shared_by_its_models_and_a_profile_rpm_is_its_own(monkeypatch):
+    config = {
+        "backends": {"t": {"base_url": "https://t.example/v1", "key": "k", "rpm": 190}},
+        "models": {"x": {"backend": "t", "model": "m-x"}, "y": {"backend": "t", "model": "m-y", "rpm": 18}},
+    }
+    x, y = llm.profile("x", config), llm.profile("y", config)
+    assert (x.backend_rpm, x.rpm, y.backend_rpm, y.rpm) == (190, None, 190, 18)
+    spaced = []
+    monkeypatch.setattr(llm, "_space", lambda key, rpm: spaced.append((key, rpm)))
+
+    class Client:  # stands in for OpenAI(); only the throttle is under test
+        def __init__(self, **kw):
+            self.chat = self
+
+        @property
+        def completions(self):
+            return self
+
+        def create(self, **kw):
+            raise RuntimeError("sent")
+
+    monkeypatch.setattr("openai.OpenAI", Client)
+    for p in (x, y):
+        with pytest.raises(RuntimeError):
+            llm._complete(p, [], {}, False)
+    assert spaced == [(("t", "k"), 190), (("t", "k"), 190), (("m-y",), 18)]
+
+
+def test_attempt_zero_keeps_the_old_cache_key_and_a_retry_gets_its_own(monkeypatch, tmp_path):
+    monkeypatch.setenv("A_KEY", "secret")
+    p = llm.profile("judge", CONFIG)
+    msg = [{"role": "user", "content": "ถาม"}]
+    assert llm.cache_key(p, msg, {}, False, 0) == llm.cache_key(p, msg, {}, False)
+    assert len({llm.cache_key(p, msg, {}, False, a) for a in (0, 1, 2)}) == 3
+    monkeypatch.setattr(llm, "CACHE", tmp_path)
+    sent = []
+    monkeypatch.setattr(llm, "_complete", lambda p, m, params, j: sent.append(params) or (f"ตอบ{len(sent)}", "m", {}, "stop"))
+    assert [llm.chat(p, msg, attempt=a).text for a in (0, 1, 0)] == ["ตอบ1", "ตอบ2", "ตอบ1"]
+    assert sent == [{"temperature": 0}] * 2  # the attempt is not sent to the backend
