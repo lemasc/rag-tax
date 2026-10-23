@@ -1,0 +1,23 @@
+{
+ "chunks_sha": "f6caa7266653",
+ "extra_tokens": 512,
+ "top": 5,
+ "ranked": [
+  "dense",
+  "hybrid"
+ ],
+ "n_twos": {
+  "clause": 40,
+  "later-part": 20
+ },
+ "seed": 20261022,
+ "left_out": {
+  "other type": 1594,
+  "2s not sampled": 32
+ },
+ "judges": [
+  "judge-sol-or",
+  "judge-haiku",
+  "judge-deepseek"
+ ]
+}

@@ -2,8 +2,10 @@
 Ollama). Backends and named model profiles live in rag/models.toml; API keys in .env (see .env.example).
 
 Every call is cached on disk, keyed by base URL, model, messages and parameters, so re-running a step or re-scoring
-answers costs nothing and returns the same text. The cache file also keeps the model id the backend reports and the
-token usage.
+answers costs nothing and returns the same text. The cache file also keeps the model id the backend reports, the
+token usage and why the reply ended (`finish_reason`). A reply cut off by `max_tokens` is asked again once with twice
+the cap (the answer is cached under the original request, so a re-run does not pay for the cut-off call); a reply
+still cut off raises `Truncated` and is not cached.
 
 Run: uv run python -m rag.llm check                # which backends have a key and base URL
      uv run python -m rag.llm models openai        # model ids the key can see
@@ -27,6 +29,9 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).parent.parent
 MODELS = Path(__file__).parent / "models.toml"
 CACHE = ROOT / "rag" / "out" / "llm_cache"
+CAP_PARAMS = ("max_tokens", "max_completion_tokens")  # the parameter that caps a reply, whichever the backend takes
+TOTALS = ("prompt_tokens", "completion_tokens", "total_tokens")
+CAP_GROWTH = 2  # a cut-off reply is asked again with this many times the cap
 
 load_dotenv(ROOT / ".env")
 
@@ -50,6 +55,16 @@ class Reply:
     usage: dict
     cached: bool
     seconds: float
+    finish: str | None = None  # finish_reason of the call; None for a cache file written before it was kept
+
+
+class Truncated(ValueError):
+    """The reply hit the token cap, also after asking again with a larger one. Not cached; callers that skip a bad
+    reply (`except ValueError`) skip this too. `usage` is what the calls were paid for, since no cache file keeps it."""
+
+    def __init__(self, message: str, usage: dict | None = None):
+        super().__init__(message)
+        self.usage = usage or {}
 
 
 def read_config(path: Path = MODELS) -> dict:
@@ -92,7 +107,7 @@ _last_call: dict[str, float] = {}
 _throttle = threading.Lock()
 
 
-def _complete(p: Profile, messages: list[dict], params: dict, json_out: bool) -> tuple[str, str, dict]:
+def _complete(p: Profile, messages: list[dict], params: dict, json_out: bool) -> tuple[str, str, dict, str | None]:
     from openai import OpenAI
 
     client = _clients.get((p.base_url, p.api_key))
@@ -107,7 +122,7 @@ def _complete(p: Profile, messages: list[dict], params: dict, json_out: bool) ->
     extra = {"response_format": {"type": "json_object"}} if json_out and p.json_mode else {}
     r = client.chat.completions.create(model=p.model, messages=messages, **params, **extra)
     usage = r.usage.model_dump() if r.usage else {}
-    return r.choices[0].message.content or "", r.model, usage
+    return r.choices[0].message.content or "", r.model, usage, r.choices[0].finish_reason
 
 
 def chat(p: Profile | str, messages: list[dict], *, json_out: bool = False, use_cache: bool = True, **params) -> Reply:
@@ -118,18 +133,30 @@ def chat(p: Profile | str, messages: list[dict], *, json_out: bool = False, use_
     path = CACHE / key[:2] / f"{key}.json"
     if use_cache and path.exists():
         c = json.loads(path.read_text(encoding="utf-8"))
-        return Reply(c["text"], c["served_model"], c["usage"], cached=True, seconds=c["seconds"])
+        return Reply(c["text"], c["served_model"], c["usage"], cached=True, seconds=c["seconds"], finish=c.get("finish_reason"))
     t = time.monotonic()
-    text, served, usage = _complete(p, messages, params, json_out)
+    used = params
+    text, served, usage, finish = _complete(p, messages, used, json_out)
+    cap_name = next((k for k in CAP_PARAMS if k in params), None)
+    if finish == "length" and cap_name:
+        used = params | {cap_name: params[cap_name] * CAP_GROWTH}
+        print(f"llm: {p.name} cut off at {params[cap_name]} tokens, asking again with {used[cap_name]}", file=sys.stderr)
+        first = usage
+        text, served, usage, finish = _complete(p, messages, used, json_out)
+        usage = usage | {k: first.get(k, 0) + usage.get(k, 0) for k in TOTALS}  # both calls were paid
     seconds = round(time.monotonic() - t, 2)
+    if finish == "length":
+        raise Truncated(f"{p.name} reply cut off at {used.get(cap_name, 'its own limit')} tokens "
+                        f"(paid {usage.get('prompt_tokens', 0)} in, {usage.get('completion_tokens', 0)} out): {text[:200]!r}", usage)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(dict(
         profile=p.name, backend=p.backend, base_url=p.base_url, model=p.model, served_model=served, params=params,
-        json=json_out, messages=messages, text=text, usage=usage, seconds=seconds, at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        params_used=used, finish_reason=finish, json=json_out, messages=messages, text=text, usage=usage, seconds=seconds,
+        at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     ), ensure_ascii=False, indent=1), encoding="utf-8")
     tmp.replace(path)
-    return Reply(text, served, usage, cached=False, seconds=seconds)
+    return Reply(text, served, usage, cached=False, seconds=seconds, finish=finish)
 
 
 JSON_BLOCK = re.compile(r"\{.*\}", re.S)

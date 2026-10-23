@@ -167,8 +167,15 @@ def grade(judge_name: str, items: list[dict], records: dict[str, dict], chunks: 
         context = evaluate.conversation(rec, records)
         for ids in batches([e["chunk_id"] for e in it["pool"]], it["id"]):
             jobs.append((it["id"], rec, context, [chunks[c] for c in ids]))
+    def run(job):
+        try:
+            return job[0], grade_batch(ask, job[1], job[2], job[3])
+        except ValueError as e:  # a reply unusable twice: keep the other batches
+            print(f"{judge_name}: {job[0]} batch of {len(job[3])} not graded: {e}")
+            return job[0], {}
+
     with ThreadPoolExecutor(evaluate.WORKERS) as ex:
-        done = list(ex.map(lambda j: (j[0], grade_batch(ask, j[1], j[2], j[3])), jobs))
+        done = list(ex.map(run, jobs))
     return [dict(id=q, chunk_id=c, grade=g) for q, got in done for c, g in got.items()]
 
 

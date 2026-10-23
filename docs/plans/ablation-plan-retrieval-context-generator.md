@@ -6,8 +6,8 @@ Status: draft 2026-10-23. Tracks what we run next, and why, now that the corpus 
 
 | Done | Not done |
 |---|---|
-| Corpus settled; **2,070 chunks frozen** from 173 documents (a test fails if they change) | Any run on the frozen chunks. Both earlier dev runs, their human labels and the top-50 diagnostic were made on the **old** chunks, so they are background, not results |
-| Retrieval: dense (bge-m3), sparse (BM25), hybrid (RRF) | Retrieval metrics beyond E1 (E1 is done, see the Log); E2 onward |
+| Corpus settled; **2,070 chunks frozen** from 173 documents (a test fails if they change) | Any answer run on the frozen chunks. Both earlier dev runs, their human labels and the top-50 diagnostic were made on the **old** chunks, so they are background, not results |
+| Retrieval: dense (bge-m3), sparse (BM25), hybrid (RRF) | E3 onward (E1 and E2 are done, see the Log) |
 | Generation (`rag/answer.py`) and a demo (`demo.py`) | A generator we can report: the only one so far is a GPT dev stand-in, from the same family as one judge |
 | Answer scoring: RAGAS faithfulness, RAGAS answer relevance, rubric judge; a three-judge panel checked against human labels | Ablations, failure analysis, slides, the AI audit in the course template |
 
@@ -56,7 +56,7 @@ flowchart TD
 | # | Experiment | Needs generation | Needs a person | Status |
 |---|---|---|---|---|
 | E1 | Ranking ablation: dense vs sparse vs hybrid | no | no | **done 2026-10-23** (`rag/pooled.py`); summary in the Log, details in `docs/experiments/` |
-| E2 | Does adding neighbouring clauses make a chunk answer the question? | no | no | to build, after E1 |
+| E2 | Does adding neighbouring clauses make a chunk answer the question? | no | no | **done 2026-10-23** (`rag/neighbours.py`); summary in the Log, details in `docs/experiments/` |
 | E3 | End-to-end: does better retrieval or context give better answers? | yes, one generator | no | needs the generator chosen |
 | E4 | Generator ablation | yes, 3–4 generators | no | needs the generator list |
 | H | Confirm the panel's chunk grades; validate the judge on new answers | no | yes | when someone has time |
@@ -120,21 +120,29 @@ Each is reported twice: a "2" as the panel **median** (lenient) and as **all thr
 
 ## E2 Do neighbouring clauses help?
 
+**Pre-review (2026-10-23).** Before spending judge calls, 10 later-part chunks (3 clause, 4 statute, 3 annex, each a distinct chunk) were marked by hand on "would the missing text make this chunk answer the question": 1 yes, 3 unsure, 6 no. By type: clause 0 yes of 3; statute 1 yes, 1 unsure, 2 no of 4; annex 0 yes, 2 unsure, 1 no of 3. A first read of 7 random 1-graded chunks agreed: most 1s are on-topic misses (the chunk is about a different subtopic), not clauses missing a condition next door. So the expected effect is small, the clause stratum most of all, and the plan keeps the cost low and the strata separate.
+
 **Question.** Legal clauses are small. Is a clause often "on topic but not enough" because the condition, exception or definition it needs sits in the next clause?
 
 This is a **hypothesis**, not a finding. Part of the gap is already covered: a clause's header includes the opening words of its parent มาตรา or ข้อ. What the header does **not** carry is sibling items ("ทั้งนี้ …", exceptions, definitions in another ข้อ).
 
 **Design.**
 
-1. Take clause chunks in any mode's top 5 that the panel graded **1** in E1.
+1. Take chunks in the **dense or hybrid** top 5 that the panel graded **1** in E1, in two strata reported separately:
+   - **Clause stratum:** `origin == "clause"` (218 chunk-question pairs, 115 questions).
+   - **Later-part stratum:** a later part (part > 1) of a split statute, annex or clause unit (59 pairs from 12 distinct chunks; the 14 later-part clause pairs stay in the clause stratum, and 16 distinct chunks cover all 73). The missing text here is the earlier part of the same unit, so the neighbour is clear. Windows, FAQ and guide chunks are not expanded: window neighbours are adjacent slices of an article (a context-size question that E3's k = 10 control covers), and a FAQ chunk carries its own question and answer.
+   - Three chunks account for 41 of the 73 later-part pairs, so also report the conversion **per distinct chunk**, not only per pair. Sparse is clearly worst in E1, so its top 5 adds many 1s nobody would serve and would dilute the conversion rate. Chunks found only by sparse are left out; as a check, also report the result for the chunks in the dense top 5 and for those in the hybrid top 5 (the two groups overlap).
+   - Leave out the **boilerplate** chunks (a decree's last มาตรา on who is in charge of enforcement, signatures). Neighbours will not fix them. Count how many were dropped. Run: none; no boilerplate chunk is in any mode's top 5 in E1.
 2. Grade each twice more, in the same blind setup as E1:
    - **expanded**: the chunk plus its neighbours (siblings in the same parent unit; capped, e.g. 512 extra tokens);
    - **alone again**: the same chunk as in E1, as a control. A 1 can become a 2 just by asking again, and this measures how often.
+   - Run both conditions on **one route per judge**. In E1, gpt-6-sol was graded over two routes (OpenAI direct, then OpenRouter) that were never compared. Run: all judges on OpenRouter, so the route effect cancels in expanded minus alone and no separate drift check was needed.
 3. Also expand a sample of chunks graded **2**, to see whether neighbours dilute them.
+4. Mark the questions with **no "2" in the E1 pool** (31 by the median, 56 by the strict rule). They are reported as their own group (see Metric).
 
 A few hundred calls in all.
 
-**Metric.** The share of 1s that become 2 when expanded, minus the share that become 2 when asked again alone (the noise floor).
+**Metric.** The share of 1s that become 2 when expanded, minus the share that become 2 when asked again alone (the noise floor). Report it overall, per source mode, and for the **no-"2" questions** on their own. A conversion there is the strongest evidence for the hypothesis, because it recovers questions that no ranking change can fix. If none convert, those questions are corpus or wording gaps and go to failure analysis.
 
 **Assumptions.**
 
@@ -149,21 +157,25 @@ A few hundred calls in all.
 | About the floor | Neighbours do not help at this level; E3 runs without them. Report it as a tested and rejected idea: a measured negative result is good ablation material. |
 | Expansion often turns 2s into 1s | Expansion dilutes; if it is still tried in E3, add only the parent's opening words or a smaller cap. |
 | The gains come from a few document types | Expand only those (e.g. legal clauses), not FAQ items, which already contain their own question and answer. |
+| Gains only in the later-part stratum | Expand later parts of split units only (the earlier part of the same unit); do not expand whole clauses. |
+| Gains appear only on the no-"2" questions | Neighbours help where nothing else answered; keep them as an E3 variant but expect a small overall effect. |
 
 ---
 
 ## E3 End-to-end context ablation
 
-**Question.** Do the retrieval and context changes from E1 and E2 give **better answers**? Retrieval metrics alone cannot show this. Neighbours change only what the generator sees, not the ranking, so E1-style metrics cannot measure them at all.
+**Question.** Do the retrieval and context changes give **better answers**? Retrieval metrics alone cannot show this. More chunks change only what the generator sees, not the ranking, so E1-style metrics cannot measure that at all.
+
+"k" here is the number of chunks the generator sees. It is not the RRF constant that `docs/experiments/2026-10-23-hybrid-vs-dense-investigation/` also calls k (hybrid uses RRF 60 throughout).
 
 **Design.** One fixed generator, the ablation subset, k = 5 unless stated. Each variant produces a run; the panel scores every answer.
 
 | Variant | Shows |
 |---|---|
-| Baseline: best mode from E1 | |
-| The other main mode (e.g. dense if hybrid won) | whether E1's ranking gap carries over to the answers |
-| Baseline + neighbours (only if E2 supports it) | whether expansion helps |
-| Baseline, k = 10 | a **context-size control**: neighbours add tokens, and more context alone might explain a gain |
+| Baseline: best mode from E1 (dense, weakly) | |
+| The other main mode (hybrid) | whether E1's ranking gap carries over to the answers |
+| ~~Baseline + neighbours~~ dropped after E2 (+.06 on clauses, below the 10-point rule) | |
+| Baseline, k = 10 | whether **more context** helps: on dev, 7 of 13 misses had an answering chunk at ranks 6–50 |
 
 **Metrics.**
 - RAGAS **faithfulness**: share of the answer's claims supported by the retrieved text.
@@ -184,8 +196,8 @@ All per category, compared per question.
 |---|---|
 | The mode that won E1 also gives better answers | E1's retrieval grades predict answer quality, so later ranking changes (a reranker) can be screened with E1 alone, cheaply. |
 | E1's winner does **not** give better answers | Retrieval grades are not a good proxy here. Look at whether the generator ignores good chunks (the earlier "answer in the top 5 but wrong" case). Later retrieval changes must be tested end to end. |
-| Neighbours beat both baseline and k = 10 | Adopt neighbours; the mechanism is "the missing condition was next door". |
-| Neighbours ≈ k = 10, both above baseline | The gain is from more context, not neighbours. Adopt the simpler option (k = 10) and say why. |
+| k = 10 above baseline | Adopt k = 10; check per category whether the gain comes from questions whose answering chunk was at ranks 6–10 in E1. |
+| k = 10 below baseline | Extra chunks distract the generator (lookalikes graded 1, see E1); keep k = 5 and report it. |
 | Nothing beats baseline | Keep the baseline. Report what was tried and why it did not help. |
 
 ---
@@ -233,15 +245,15 @@ None of these block E1–E4. Each turns a judged number into a checked one.
 |---|---|---|
 | Generator for E3 | The model the demo will use. An open model is cleaner for reporting; the GPT stand-in also works, since the generator is held fixed | E3 |
 | Generator list for E4 | Small open, mid open, small GPT, Thai-tuned pair | E4 |
-| E2 threshold | Proposed 10 points over the noise floor; agree before the run | E2 |
-| Neighbour definition | Same parent unit (proposed) or previous/next chunk; token cap | E2 |
+| E2 threshold | 10 points over the noise floor, as proposed; not met (+.06 on clauses) | done |
+| Neighbour definition | Used: the other parts of the same unit, then sibling units under the same parent (nearest first, next before previous), at most 512 extra tokens | done |
 | Corpus gaps (Q0111 general mutual-fund gains, Q0145 documents for a first online filing) | Report only (proposed: adding sources would move chunk ids) | before E1 |
 
 ## Known limits (state them in the report)
 
 - Panel grades are lenient on hard questions; absolute scores run high. Comparisons between variants are the reliable part.
 - Recall is relative to the graded pool.
-- Some of the smallest chunks are boilerplate (a decree's last มาตรา "ให้รัฐมนตรีว่าการกระทรวงการคลังรักษาการ…" plus signatures). They can take retrieval slots. Neighbours will not fix them; count how often they appear in E1's top 5.
+- Some of the smallest chunks are boilerplate (a decree's last มาตรา "ให้รัฐมนตรีว่าการกระทรวงการคลังรักษาการ…" plus signatures; 15 chunks). In E1 none reached any mode's top 5, so they do not take retrieval slots there.
 - Two corpus gaps are known (Q0111, Q0145). No variant can fix them.
 
 ## Log
@@ -261,3 +273,15 @@ Details: [`docs/experiments/2026-10-23-e1-ranking-ablation/`](../experiments/202
 - Sparse is clearly worst: hybrid beats it by about 0.2 on every metric.
 - Dense is at least as good as hybrid: hit@5 .717 vs .699 (inside the interval), nDCG@10 .695 vs .664 and recall@10 .686 vs .608 (outside). By the outcome table: "a single mode beats hybrid", weakly.
 - Caveats: gpt-6-sol was graded over two routes (OpenAI direct, then OpenRouter) that were not compared; 31 questions (56 strict) have no 2 in the pool.
+- Effect on E2 (plan updated after reading this): the sample comes from dense and hybrid top 5 only, boilerplate is excluded, the no-"2" questions are reported as their own group, and sol's route drift is measured next to the "alone again" control (in the run, all judges went on OpenRouter, so this was not needed; see the E2 entry). E3's baseline row is now dense.
+- Pre-review of the E2 sample (hand-marked, 10 chunks): 1 yes, 3 unsure, 6 no, so E2 stays clause-led and adds a separate later-part stratum (statute, annex) because that is where the yes and unsure marks were. The 73 later-part pairs come from only 16 distinct chunks, so E2 is also reported per chunk. One marked chunk was a keyword match on ค่าตอบแทน in an insurance-agent clause: leniency from matching terms, for failure analysis.
+
+### E2 neighbouring text (2026-10-23, done)
+
+Details: [`docs/experiments/2026-10-23-e2-neighbours/`](../experiments/2026-10-23-e2-neighbours/README.md).
+
+- 277 chunks graded 1 in E1 (218 clause, 59 later-part from 12 distinct chunks), each graded alone and with neighbours by the three judges on OpenRouter; 54 chunks graded 2 as a dilution check.
+- Share of the 1s that become 2, expanded minus alone: +.05 [+.01, +.09] overall, **+.06 [+.02, +.10] on clauses** (the upper end touches the 10-point rule; the decision rests on the estimate), .00 [−.11, +.12] on later parts, +.03 [−.09, +.11] on the no-"2" questions. Strict gives the same size. Sol, haiku and DeepSeek each give +.03 to +.05. The noise floor is about 10%.
+- Only 17 of 123 distinct chunks gain; neighbours do not dilute good chunks (dilution .00).
+- By the outcome table: below the 10-point rule, a small real effect on clauses. The 1s are mostly on-topic misses, not clauses missing a condition next door. Neighbours are out of E3; the k = 10 control stays.
+- Open: E2 measures the panel's chunk grades, not answers; the later-part result rests on 12 chunks. Sol stopped once on OpenRouter's credit limit (217 of 314 calls were cached and reused).
