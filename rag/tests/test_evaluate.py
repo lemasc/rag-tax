@@ -142,6 +142,24 @@ def test_reference_run_gives_the_rubric_its_sources_and_skips_faithfulness():
     assert len(seen) == 2 and "text c2" in seen[-1]
 
 
+def test_a_failed_faithfulness_step_keeps_the_rubric():
+    def ask(messages, check):
+        system = messages[0]["content"]
+        if "claim" in system and "JSON" in system and "verdicts" not in system:
+            return check(dict(claims=["a", "b"])), [FakeReply()]
+        if "verdicts" in system:
+            raise ValueError("judge reply unusable twice: 3 verdicts for 2 claims")
+        if "noncommittal" in system:
+            return check(dict(questions=["q"], noncommittal=True)), [FakeReply()]
+        return check(dict(grounded=2, correct=1, useful=2, behaviour="na", relevance={"1": 2})), [FakeReply()]
+
+    chunks = {"c1": dict(chunk_id="c1", kind="faq", header="", text="t")}
+    r = dict(id="Q1", category="A", kind="normal", set=None, turn=None, question="q", answer="a", hits=[dict(chunk_id="c1")])
+    s = score_record(ask, None, r, chunks, {"Q1": r})
+    assert s["faithfulness"]["score"] is None and "3 verdicts" in s["faithfulness"]["error"]
+    assert s["rubric"]["correct"] == 1
+
+
 def rec(kind, category, f, rel, g, behaviour="na", tags=()):
     return dict(id="Q", category=category, kind=kind, faithfulness=dict(score=f), relevance=dict(score=rel),
                 rubric=dict(grounded=g, correct=g, useful=g, behaviour=behaviour, tags=list(tags)))

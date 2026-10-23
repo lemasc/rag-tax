@@ -217,10 +217,15 @@ def context_for(rec: dict, chunks: dict[str, dict], by_id: dict[str, dict]) -> s
 
 
 def score_record(ask: Ask, embedder, rec: dict, chunks: dict, by_id: dict, ref: dict | None = None) -> dict:
-    """`ref`: the same question's record in a reference run, whose sources the rubric reads instead (no faithfulness)."""
+    """`ref`: the same question's record in a reference run, whose sources the rubric reads instead (no faithfulness).
+    A faithfulness step the judge cannot complete (e.g. a verdict count that never matches) leaves faithfulness None
+    with the error, and the judge's relevance and rubric are kept; `failed_faithfulness` in the config lists them."""
     if ref is None:
         context = context_for(rec, chunks, by_id)
-        f, r1 = faithfulness(ask, context, rec["answer"])
+        try:
+            f, r1 = faithfulness(ask, context, rec["answer"])
+        except ValueError as e:
+            f, r1 = dict(score=None, claims=[], error=str(e)[:300]), []
     else:
         rec = rec | dict(hits=ref["hits"])
         context = context_for(rec, chunks, by_id)
@@ -350,6 +355,7 @@ def evaluate(path: Path, judge_name: str = JUDGE_PROFILE, limit: int | None = No
         run_id=path.name, reference_run=reference and reference.name, scored=time.strftime("%Y-%m-%dT%H:%M:%S%z"), judge_version=JUDGE_VERSION,
         judge=dict(profile=judge.name, backend=judge.backend, model=judge.model, base_url=judge.base_url, params=judge.params),
         embed_model=embedder.model_name, relevance_n=RELEVANCE_N, current_tax_year=CURRENT_TAX_YEAR, n_scored=len(scores), not_scored=not_scored,
+        failed_faithfulness=[s["id"] for s in scores if s["faithfulness"].get("error")],
         new_prompt_tokens=sum(s["judge_tokens"]["prompt"] for s in scores),
         new_completion_tokens=sum(s["judge_tokens"]["completion"] for s in scores),
     ), ensure_ascii=False, indent=1), encoding="utf-8")
