@@ -24,7 +24,7 @@ def test_batches_cover_the_pool_once_in_an_order_that_depends_only_on_the_questi
 def test_check_grades_wants_every_number_once_and_only_0_1_2():
     check = check_grades(2)
     assert check({"relevance": {"1": 2, "2": 0}}) == {1: 2, 2: 0}
-    for bad in ({"relevance": {"1": 2}}, {"relevance": {"1": 2, "2": 3}}, {"relevance": {"1": 2, "2": 1, "3": 1}}):
+    for bad in ({"relevance": ":{"}, {"relevance": {"1": 2}}, {"relevance": {"1": 2, "2": 3}}, {"relevance": {"1": 2, "2": 1, "3": 1}}):
         with pytest.raises(ValueError):
             check(bad)
 

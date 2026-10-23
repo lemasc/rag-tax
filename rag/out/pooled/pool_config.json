@@ -1,0 +1,9 @@
+{
+ "chunks_sha": "f6caa7266653",
+ "top": 10,
+ "modes": [
+  "dense",
+  "sparse",
+  "hybrid"
+ ]
+}

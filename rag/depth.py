@@ -142,6 +142,8 @@ def batches(chunk_ids: list[str], qid: str, size: int = BATCH, seed: int = SEED)
 
 def check_grades(n: int):
     def check(d: dict) -> dict[int, int]:
+        if not isinstance(d["relevance"], dict):  # a judge that wrote nonsense for the value
+            raise ValueError(f"relevance is not an object: {d['relevance']!r}")
         rel = {int(k): int(v) for k, v in d["relevance"].items()}
         if sorted(rel) != list(range(1, n + 1)) or not set(rel.values()) <= {0, 1, 2}:
             raise ValueError(f"relevance for {sorted(rel)}: {rel}")
