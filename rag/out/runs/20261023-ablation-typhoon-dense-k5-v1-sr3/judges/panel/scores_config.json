@@ -1,0 +1,36 @@
+{
+ "run_id": "20261023-ablation-typhoon-dense-k5-v1-sr3",
+ "combined": "2026-10-23T21:44:57+0700",
+ "judge_version": "v2",
+ "judges": {
+  "judge-luna-or": {
+   "model": "openai/gpt-6-luna",
+   "base_url": "https://openrouter.ai/api/v1",
+   "params": {
+    "reasoning_effort": "medium",
+    "max_tokens": 6000
+   },
+   "scored": "2026-10-23T20:58:11+0700"
+  },
+  "judge-haiku": {
+   "model": "anthropic/claude-haiku-5.5",
+   "base_url": "https://openrouter.ai/api/v1",
+   "params": {
+    "temperature": 0
+   },
+   "scored": "2026-10-23T20:44:48+0700"
+  },
+  "judge-deepseek": {
+   "model": "deepseek/deepseek-v4.1-flash",
+   "base_url": "https://openrouter.ai/api/v1",
+   "params": {
+    "temperature": 0,
+    "max_tokens": 10000
+   },
+   "scored": "2026-10-23T21:44:52+0700"
+  }
+ },
+ "aggregation": "median of grounded/correct/useful/relevance, majority of behaviour and tags, mean of faithfulness",
+ "n_scored": 131,
+ "n_contested": 40
+}
