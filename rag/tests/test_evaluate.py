@@ -89,6 +89,19 @@ def test_ask_retries_once_without_the_cache(monkeypatch):
     assert checked == ["x"] and calls == [True, False]
 
 
+def test_ask_retries_a_rubric_whose_relevance_is_not_a_mapping(monkeypatch):
+    good = dict(grounded=2, correct=2, useful=2, behaviour="na", relevance={"1": 2})
+    replies = iter([good | dict(relevance="1: 2"), good])
+
+    class R:
+        cached = False
+        usage = {}
+
+    monkeypatch.setattr("rag.evaluate.llm.chat_json", lambda judge, messages, use_cache=True, **kw: (next(replies), R()))
+    checked, _ = make_ask(None)([], check_rubric(1))
+    assert checked["relevance"] == {"1": 2}
+
+
 def test_ask_does_not_retry_a_reply_cut_off_at_the_cap(monkeypatch):
     calls = []
 

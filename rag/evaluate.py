@@ -122,7 +122,7 @@ def make_ask(judge: llm.Profile) -> Ask:
                 return check(data), [r]
             except llm.Truncated as e:
                 raise ValueError(f"judge reply cut off: {e}") from e
-            except (ValueError, KeyError, TypeError) as e:
+            except (ValueError, KeyError, TypeError, AttributeError) as e:  # a field of the wrong type, e.g. relevance as a string
                 err = e
         raise ValueError(f"judge reply unusable twice: {err}")
 
