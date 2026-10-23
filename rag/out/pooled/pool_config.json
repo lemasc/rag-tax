@@ -12,5 +12,11 @@
   20,
   30
  ],
- "tested_variant": "hybrid-k10"
+ "tested_variant": "hybrid-k10",
+ "rerank": {
+  "variant": "dense-rerank",
+  "model": "BAAI/bge-reranker-v2-m3",
+  "candidates": "dense top 50",
+  "top": 10
+ }
 }
