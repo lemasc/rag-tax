@@ -2,7 +2,9 @@
 # file is the record of what each name meant, so change a profile's model only by adding a new profile.
 #
 # Backend: base_url (or base_url_env) and key_env, the .env variable holding the API key. `rpm` throttles requests
-# per minute for rate-limited free APIs (a profile may set its own, per model). `json_mode` says whether the backend accepts response_format=json_object.
+# per minute for rate-limited free APIs, shared by every profile on the backend's key; a profile's own `rpm` throttles
+# that model only (OpenRouter limits per model), and both apply. Calls are spaced evenly, so 190/min is one call every
+# 0.32 s, also under a 5-per-second limit. `json_mode` says whether the backend accepts response_format=json_object.
 # Profile: backend, model id as the backend names it, and `params` passed to chat.completions.create unchanged
 # (reasoning models reject temperature, so it is not set globally).
 #
@@ -22,11 +24,12 @@ json_mode = true
 [backends.typhoon]
 base_url = "https://api.opentyphoon.ai/v1"  # unverified
 key_env = "TYPHOON_API_KEY"
+rpm = 190  # free tier (2026-10-23): 5 requests a second, 200 a minute; a little under, for clock jitter
 
 [backends.thaillm]
-base_url_env = "THAILLM_BASE_URL"  # unverified: not known to be OpenAI-compatible
+base_url = "http://thaillm.or.th/api/v1"  # OpenAI-compatible (2026-10-23)
 key_env = "THAILLM_API_KEY"
-rpm = 150
+rpm = 190  # free tier (2026-10-23): 5 requests a second, 200 a minute
 
 [backends.iapp]
 base_url = "https://api.iapp.co.th/v3/llm/openthai2p0"  # unverified
@@ -50,6 +53,37 @@ params = { reasoning_effort = "medium" }  # reasoning models reject temperature
 backend = "openai"
 model = "gpt-6-luna"
 params = { reasoning_effort = "low" }
+
+# ---- Thai generators (2026-10-23): candidates for E3's fixed generator and E4, from families none of the judges is
+# in. Typhoon's key lists only typhoon-v2.5-30b-a3b-instruct (typhoon-v2.1-12b-instruct: "Model not found"). The
+# ThaiLLM models are fine-tunes of one 8B base by different groups; Pathumma (NECTEC), OpenThaiGPT and THaLLE (KBTG)
+# keep the second generator away from Typhoon's vendor (SCB 10X, which also makes Typhoon-S-ThaiLLM). The ThaiLLM models
+# reason in a <think> block inside the reply text; rag.answer cuts it before reading citations. Caps leave room for
+# that; a reply cut off is asked again with twice the cap (rag.llm).
+[models.typhoon]
+backend = "typhoon"
+model = "typhoon-v2.5-30b-a3b-instruct"
+params = { temperature = 0, max_tokens = 2048 }
+
+[models.pathumma]
+backend = "thaillm"
+model = "Pathumma-ThaiLLM-qwen3-8b-think-3.0.0"
+params = { temperature = 0.6, max_tokens = 8192 }  # Qwen3 thinking models loop under greedy decoding
+
+[models.pathumma-nothink]  # the same model with thinking turned off in its chat template
+backend = "thaillm"
+model = "Pathumma-ThaiLLM-qwen3-8b-think-3.0.0"
+params = { temperature = 0.6, max_tokens = 2048, extra_body = { chat_template_kwargs = { enable_thinking = false } } }
+
+[models.openthaigpt]
+backend = "thaillm"
+model = "OpenThaiGPT-ThaiLLM-8B-Instruct-v7.2"
+params = { temperature = 0.6, max_tokens = 4096 }
+
+[models.thalle]
+backend = "thaillm"
+model = "THaLLE-0.2-ThaiLLM-8B-fa"
+params = { temperature = 0.6, max_tokens = 4096 }
 
 # ---- candidate judges (2026-10-22), different families from the generators; compared with the human labels on the
 # dev run before one is chosen for the panel. Undated aliases: judge every variant of an experiment in one session.

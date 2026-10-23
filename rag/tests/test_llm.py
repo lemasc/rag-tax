@@ -124,3 +124,31 @@ def test_parse_json_finds_the_object(text):
 def test_parse_json_fails_loudly_without_an_object():
     with pytest.raises(ValueError, match="no JSON object"):
         llm.parse_json("คะแนน 4")
+
+
+def test_backend_rpm_is_shared_by_its_models_and_a_profile_rpm_is_its_own(monkeypatch):
+    config = {
+        "backends": {"t": {"base_url": "https://t.example/v1", "key": "k", "rpm": 190}},
+        "models": {"x": {"backend": "t", "model": "m-x"}, "y": {"backend": "t", "model": "m-y", "rpm": 18}},
+    }
+    x, y = llm.profile("x", config), llm.profile("y", config)
+    assert (x.backend_rpm, x.rpm, y.backend_rpm, y.rpm) == (190, None, 190, 18)
+    spaced = []
+    monkeypatch.setattr(llm, "_space", lambda key, rpm: spaced.append((key, rpm)))
+
+    class Client:  # stands in for OpenAI(); only the throttle is under test
+        def __init__(self, **kw):
+            self.chat = self
+
+        @property
+        def completions(self):
+            return self
+
+        def create(self, **kw):
+            raise RuntimeError("sent")
+
+    monkeypatch.setattr("openai.OpenAI", Client)
+    for p in (x, y):
+        with pytest.raises(RuntimeError):
+            llm._complete(p, [], {}, False)
+    assert spaced == [(("t", "k"), 190), (("t", "k"), 190), (("m-y",), 18)]

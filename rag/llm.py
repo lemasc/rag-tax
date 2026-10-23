@@ -45,7 +45,8 @@ class Profile:
     api_key: str
     params: dict = field(default_factory=dict)
     json_mode: bool = False
-    rpm: int | None = None
+    rpm: int | None = None  # this model's own limit, throttled per model
+    backend_rpm: int | None = None  # the backend's limit, shared by every model on the same key
 
 
 @dataclass
@@ -92,7 +93,7 @@ def profile(name: str, config: dict | None = None) -> Profile:
         raise SystemExit(f"profile {name}: model id is empty in models.toml (list ids with `python -m rag.llm models {m['backend']}`)")
     base_url, key = backend_endpoint(m["backend"], b)
     return Profile(name=name, backend=m["backend"], model=m["model"], base_url=base_url, api_key=key,
-                   params=dict(m.get("params", {})), json_mode=b.get("json_mode", False), rpm=m.get("rpm", b.get("rpm")))
+                   params=dict(m.get("params", {})), json_mode=b.get("json_mode", False), rpm=m.get("rpm"), backend_rpm=b.get("rpm"))
 
 
 def cache_key(p: Profile, messages: list[dict], params: dict, json_out: bool) -> str:
@@ -103,8 +104,18 @@ def cache_key(p: Profile, messages: list[dict], params: dict, json_out: bool) ->
 
 
 _clients: dict[tuple[str, str], object] = {}
-_last_call: dict[str, float] = {}
+_last_call: dict[tuple, float] = {}
 _throttle = threading.Lock()
+
+
+def _space(key: tuple, rpm: int) -> None:
+    """Simple spacing for rate-limited free APIs: at most `rpm` calls a minute under `key`, evenly spaced (so a
+    per-second limit above rpm/60 holds too). The lock keeps parallel callers in line."""
+    with _throttle:
+        wait = _last_call.get(key, 0) + 60 / rpm - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        _last_call[key] = time.monotonic()
 
 
 def _complete(p: Profile, messages: list[dict], params: dict, json_out: bool) -> tuple[str, str, dict, str | None]:
@@ -112,13 +123,11 @@ def _complete(p: Profile, messages: list[dict], params: dict, json_out: bool) ->
 
     client = _clients.get((p.base_url, p.api_key))
     if client is None:
-        client = _clients[(p.base_url, p.api_key)] = OpenAI(base_url=p.base_url, api_key=p.api_key, max_retries=5, timeout=180)
-    if p.rpm:  # simple spacing for rate-limited free APIs; the lock keeps parallel callers in line
-        with _throttle:
-            wait = _last_call.get(p.model, 0) + 60 / p.rpm - time.monotonic()
-            if wait > 0:
-                time.sleep(wait)
-            _last_call[p.model] = time.monotonic()
+        client = _clients[(p.base_url, p.api_key)] = OpenAI(base_url=p.base_url, api_key=p.api_key, max_retries=5, timeout=300)  # ThaiLLM reasoning replies have taken 166 s
+    if p.backend_rpm:
+        _space((p.backend, p.api_key), p.backend_rpm)
+    if p.rpm:
+        _space((p.model,), p.rpm)
     extra = {"response_format": {"type": "json_object"}} if json_out and p.json_mode else {}
     r = client.chat.completions.create(model=p.model, messages=messages, **params, **extra)
     usage = r.usage.model_dump() if r.usage else {}
@@ -193,10 +202,13 @@ def _check(config: dict) -> None:
 
 
 def _models(config: dict, backend: str) -> None:
-    from openai import OpenAI
+    import httpx
 
     url, key = backend_endpoint(backend, config["backends"][backend])
-    for m in sorted(x.id for x in OpenAI(base_url=url, api_key=key).models.list()):
+    r = httpx.get(f"{url}/models", headers={"Authorization": f"Bearer {key}"}, timeout=60)
+    r.raise_for_status()
+    body = r.json()  # OpenAI wraps the list in {"data": [...]}; Typhoon returns the bare list
+    for m in sorted(x["id"] for x in (body["data"] if isinstance(body, dict) else body)):
         print(m)
 
 

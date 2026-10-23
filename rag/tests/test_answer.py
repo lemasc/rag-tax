@@ -1,6 +1,8 @@
-"""rag.answer without network: prompt assembly, citations, multi-turn query."""
+"""rag.answer without network: prompt assembly, citations, multi-turn query, reasoning cut from replies."""
 
-from rag.answer import SYSTEM, citations, messages_for, retrieval_query, source_block, year_label
+import pytest
+
+from rag.answer import SYSTEM, citations, messages_for, retrieval_query, source_block, strip_thinking, year_label
 from rag.questions import Question
 
 HITS = [
@@ -34,3 +36,17 @@ def test_messages_put_sources_only_on_the_current_turn():
 def test_retrieval_query_joins_earlier_turns():
     q = lambda t, n: Question(id=f"Q{n}", category="c", difficulty=None, text=t, kind="multi_turn", set="A", turn=n)  # noqa: E731
     assert retrieval_query(q("ล่ะ?", 2), [q("เงินเดือน", 1)]) == "เงินเดือน\nล่ะ?"
+
+
+@pytest.mark.parametrize("reply", [
+    "<think>ดู [2] ก่อน</think>\n\nหักได้ 60,000 บาท [1]",
+    "ดู [2] ก่อน</think>\n\nหักได้ 60,000 บาท [1]",  # the template opened the block in the prompt
+])
+def test_reasoning_is_cut_and_its_citations_do_not_count(reply):
+    text, cut = strip_thinking(reply)
+    assert text.strip() == "หักได้ 60,000 บาท [1]" and cut > 0
+    assert citations(text, HITS) == (["a#001"], [])
+
+
+def test_reply_without_reasoning_is_unchanged():
+    assert strip_thinking("หักได้ [1][2]") == ("หักได้ [1][2]", 0)

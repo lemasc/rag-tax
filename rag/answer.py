@@ -47,6 +47,17 @@ KIND_TH = {
     "statute": "ประมวลรัษฎากร", "image": "อินโฟกราฟิก กรมสรรพากร", "index": "หน้าเว็บ กรมสรรพากร",
 }
 CITE = re.compile(r"\[(\d+)\]")
+THINK_END = "</think>"
+
+
+def strip_thinking(text: str) -> tuple[str, int]:
+    """The answer without a reasoning model's <think> block, and the length of what was cut. Some chat templates open
+    the block in the prompt, so the reply may hold only the closing tag; everything up to the last one is reasoning.
+    Its [n] would otherwise count as citations."""
+    if THINK_END not in text:
+        return text, 0
+    head, _, tail = text.rpartition(THINK_END)
+    return tail, len(head) + len(THINK_END)
 
 
 def year_label(c: dict) -> str:
@@ -85,9 +96,11 @@ def citations(answer: str, hits: list[dict]) -> tuple[list[str], list[int]]:
     return [hits[n - 1]["chunk_id"] for n in nums if 1 <= n <= len(hits)], [n for n in nums if not 1 <= n <= len(hits)]
 
 
-def answer(gen: llm.Profile, question: str, hits: list[dict], turns: list[tuple[str, str]] = ()) -> tuple[str, llm.Reply]:
+def answer(gen: llm.Profile, question: str, hits: list[dict], turns: list[tuple[str, str]] = ()) -> tuple[str, int, llm.Reply]:
+    """The answer, the characters of reasoning cut from it (the raw reply stays in the cache) and the reply."""
     r = llm.chat(gen, messages_for(question, hits, turns))
-    return r.text.strip(), r
+    text, thinking = strip_thinking(r.text)
+    return text.strip(), thinking, r
 
 
 def file_sha(path: Path) -> str:
@@ -128,13 +141,13 @@ def run(qs: list[Question], all_qs: list[Question], gen_name: str, mode: str, k:
         turns: list[tuple[str, str]] = []
         for q in group:
             query, hits = retrieved[q.id]
-            text, r = answer(gen, q.text, hits, turns)
+            text, thinking, r = answer(gen, q.text, hits, turns)
             cited, bad = citations(text, hits)
             records[q.id] = dict(
                 id=q.id, category=q.category, kind=q.kind, difficulty=q.difficulty, set=q.set, turn=q.turn,
                 question=q.text, retrieval_query=query, in_subset=q.id in in_subset,
                 hits=[dict(rank=h["rank"], chunk_id=h["chunk_id"], doc_id=h["doc_id"], score=round(h["score"], 4)) for h in hits],
-                answer=text, cited=cited, bad_citations=bad, served_model=r.model, usage=r.usage, seconds=r.seconds, cached=r.cached,
+                answer=text, thinking_chars=thinking, cited=cited, bad_citations=bad, served_model=r.model, usage=r.usage, seconds=r.seconds, cached=r.cached,
             )
             turns.append((q.text, text))
 
