@@ -34,6 +34,13 @@ Status: done 2026-10-23. Plan: [`../../plans/ablation-plan-retrieval-context-gen
 - From E1b on, E1 is quoted under the new panel next to E1b; the published E1 numbers (old panel) stay as they are. The new-panel numbers carry no two-route caveat (luna ran on one route).
 - luna is a judge from now on, so it is not a generator.
 
+**Spot check** (read by Claude, the assistant, not by a person; 25 pairs, seeded 20261023: 8 of sol 2 → luna 1, 5 of sol 1 → luna 2, all 12 at 0 ↔ 2)
+- sol 2 → luna 1: luna right in 6 (Q0083 an insurance-agent withholding clause for "3% withheld"; Q0289 the foreign film-crew order for "do foreigners pay"; Q0055, Q0122, Q0080, Q0081: same topic, other question), toss-up in 2 (Q0195, Q0203).
+- sol 1 → luna 2: luna right in 2 (Q0198, Q0008: the chunk shows the rule asked about), sol right in 2 (Q0199 a list of forms for "what is withholding"; Q0040 one deduction for "which deductions"), toss-up in 1 (Q0185).
+- 0 ↔ 2 (all sol 2, luna 0): sol's 2 is wrong in 10 of 12, mostly a keyword or document match (OTOP and restaurant deductions for freelance and online-sales questions; ป.120/2545's film-actor residency clause for "working abroad"). luna's 0 is too harsh in 2 (Q0177 filed-but-unpaid status; Q0319 banks sending depositor data), where 1 or 2 fits.
+- Reading: where they differ, luna is right about three times as often as sol (about 18 to 4 of 25, 3 toss-ups). sol's extra 2s are largely topic or keyword matches, the leniency E1 already noted against people. luna is sometimes too harsh, giving 0 where 1 fits.
+
 **Caveats**
+- The spot check is one more model's reading, on 25 pairs; a person's check (H1) is what would settle it.
 - This validates luna as a chunk grader. Grading answers (E3) is another task; the plan's sol check on 30 E3 answers covers that.
 - Agreement is with other LLM judges, not with people (H1).
