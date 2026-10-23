@@ -1,6 +1,6 @@
 # Plan: full-text extraction for the core legal set
 
-Status: built 2026-10-16 (`crawler/src/crawler/extract.py`). Result: 110/112 ok (82 html, 17 pdftotext, 11 OCR); พ.ร.ฎ. 260 and 270 failed because rd.go.th returns HTTP 500. Follows `legal-source-crawl.md` and the core set in `crawler/data/legal_core.csv`.
+Status: built 2026-10-16 (`crawler/src/crawler/extract.py`). Result: 110/112 ok (82 html, 17 pdftotext, 11 OCR); **since 2026-10-18 all 28 PDFs use OCR (82 html, 28 OCR)**, because pdftotext had lost `ำ` in half of them (see `AI_AUDIT.md`), so step 3 below (text layer first) describes the first build, not the current default; พ.ร.ฎ. 260 and 270 failed because rd.go.th returns HTTP 500. Follows `legal-source-crawl.md` and the core set in `crawler/data/legal_core.csv`.
 
 ## Goal
 

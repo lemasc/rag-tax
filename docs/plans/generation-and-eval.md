@@ -1,6 +1,6 @@
 # Generation and evaluation: plan
 
-Status: draft 2026-10-19. Steps 1–2 built 2026-10-20 (`rag/llm.py`, `rag/models.toml`, `rag/questions.py`, dev subset in `rag/eval/dev_questions.txt`); model ids not set until keys exist. Follows `rag-baseline.md` (retrieval works: dense, sparse, hybrid). This plan adds answer generation, the evaluation harness and the first ablations. Each step lists what it produces and what would make it done.
+Status: draft 2026-10-19, order revised 2026-10-22; chunks frozen 2026-10-22 (next: qrels on the frozen chunk ids). Steps 1–2 built 2026-10-20 (`rag/llm.py`, `rag/models.toml`, `rag/questions.py`, dev subset in `rag/eval/dev_questions.txt`); model ids not set until keys exist. Follows `rag-baseline.md` (retrieval works: dense, sparse, hybrid). This plan adds answer generation, the evaluation harness and the first ablations. Each step lists what it produces and what would make it done.
 
 ## Inputs and constraints
 
@@ -110,8 +110,8 @@ Done: `.env.example`, `llm.py`, `questions.py`; `answer.py` and `demo.py` on the
 
 Next (revised 2026-10-22, after the top-50 diagnostic). No tuning on the 13 miss questions: they are dev questions read closely, so a setting chosen to rescue them would look better than it is. What they suggest goes into the full-run ablations instead.
 
-1. **Corpus fixes, as needed:** the cut chunk (Q0145's `558~002`), and sources for the corpus gaps if that is decided (see *Open decisions*).
-2. **Settle chunking and write down why.** Done 2026-10-22: 2,069 chunks frozen (`rag/chunks_freeze.json`, enforced by a test); the size argument is in `rag-baseline.md` (*Decisions*, *Frozen chunks*). The corpus was settled first on `feat/corpus-update-1`: clause splitter for legal instruments, the 2568 filling guides cut at their own numbering and tables, explicit table rewrites, guide duplicates dropped, amend/repeal metadata. 92 of the 155 labelled chunk ids survive with the same text; the other 63 are re-mapped in step 3.
+1. **Corpus fixes, as needed:** the cut chunk (Q0145's `558~002`) is fixed (2026-10-23): the image holding the current steps is now its own chunk, `558_0_web~001`, rank 2 for Q0145's wording in a hybrid check, not a result. Still open: sources for the corpus gaps if that is decided (see *Open decisions*).
+2. **Settle chunking and write down why.** Done 2026-10-22: 2,069 chunks frozen (2,070 since 2026-10-23, one added chunk, no id moved) (`rag/chunks_freeze.json`, enforced by a test); the size argument is in `rag-baseline.md` (*Decisions*, *Frozen chunks*). The corpus was settled first on `feat/corpus-update-1`: clause splitter for legal instruments, the 2568 filling guides cut at their own numbering and tables, explicit table rewrites, guide duplicates dropped, amend/repeal metadata. 92 of the 155 labelled chunk ids survive with the same text; the other 63 are re-mapped in step 3.
 3. **Qrels:** the panel's chunk grades as a first pass, with a person confirming each 2. The panel alone is too lenient on hard questions (people kept 25 of 132 of its 2s). Qrels are keyed by chunk id, which is why chunking is settled first; the round 1 and 2 labels of the top-50 diagnostic are kept for chunks whose text does not change (text hash).
 4. **Full run, retrieval ablation:** dense, sparse, hybrid (required). A cross-encoder reranker and k = 10 as candidates, justified by 7 of 13 misses having an answering chunk at ranks 6–50.
 5. **Generator ablation**, as planned.
