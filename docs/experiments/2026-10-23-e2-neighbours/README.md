@@ -10,7 +10,7 @@ Status: done 2026-10-23. Plan: [`../../plans/ablation-plan-retrieval-context-gen
   - later-part: a later part (part > 1) of a split statute or annex unit, 59 pairs from 48 questions, **12 distinct chunks** (a few chunks come up under many questions).
   - Sparse-only chunks, boilerplate (none matched) and chunks with no neighbour that fits (none) were left out; windows, FAQ and guide chunks are not expanded (see the plan). 1,594 chunk-question pairs were of other types.
 - Dilution sample: 54 chunks graded 2 in the same strata (40 clause, 14 later-part; seeded, 32 more were not sampled).
-- Two conditions per pair, graded by the three judges (all on OpenRouter) in the batches of `rag.depth`, blind to the E1 grade and to the condition:
+- Two conditions per pair, graded by the three judges (all on OpenRouter) in the batches of `rag.depth`, blind to the E1 grade (the judge does see the marker on the neighbouring text, so it can tell the expanded condition):
   - **alone**: the chunk as in E1, the control (the noise floor);
   - **expanded**: the chunk plus the other parts of its unit, then sibling units under the same parent (nearest first, the next one before the previous one), at most 512 extra tokens (median 467), each neighbour marked as such.
 - 662 grades per judge (331 pairs × 2), 314 calls per judge. A batch with the same chunks as an E1 batch is put in reverse order in both conditions, so a judge's cached E1 reply cannot come back as the "alone" grade (3 of 157 questions).
