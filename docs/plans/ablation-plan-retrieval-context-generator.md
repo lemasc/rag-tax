@@ -62,7 +62,7 @@ flowchart TD
 |---|---|---|---|---|
 | E1 | Ranking ablation: dense vs sparse vs hybrid | no | no | **done 2026-10-23** (`rag/pooled.py`); summary in the Log, details in `docs/experiments/` |
 | E2 | Does adding neighbouring clauses make a chunk answer the question? | no | no | **done 2026-10-23** (`rag/neighbours.py`); summary in the Log, details in `docs/experiments/` |
-| S | Judge swap: can gpt-6-luna replace gpt-6-sol in the panel? | no | no | rules fixed 2026-10-23 (`rag/judge_swap.py`), luna grading the E1 pool |
+| S | Judge swap: can gpt-6-luna replace gpt-6-sol in the panel? | no | no | **done 2026-10-23** (`rag/judge_swap.py`): passes, luna takes sol's seat; summary in the Log |
 | E1b | Cross-encoder reranker, retrieval only | no | no | after S |
 | E3 | End-to-end: does retrieval, a reranker or more context give better answers? | yes, one generator | no | after E1b; generator picked by the smoke test |
 | E4 | Generator ablation | yes, 1–3 more generators | no | **optional**, if budget is left |
@@ -356,3 +356,14 @@ Details: [`docs/experiments/2026-10-23-e2-neighbours/`](../experiments/2026-10-2
 - Budget is tight: luna replaces sol from E1b on if it passes the check in "Judge swap". Rules and outcome table written, and `rag/judge_swap.py` tested with haiku standing in for luna, before luna graded anything.
 - OpenRouter's key had $0.34 of its $8 daily limit left at the start, enough for about 500 of the 875 calls; the pass is ordered so a cutoff leaves a random sample of whole questions.
 - E3 revised: no-retrieval lower bound and a reranker (E1b) added; hybrid is the first variant to drop; the generator is an open model; E4 is optional.
+
+### Judge swap (2026-10-23, done)
+
+Details: [`docs/experiments/2026-10-23-judge-swap/`](../experiments/2026-10-23-judge-swap/README.md).
+
+- luna graded all 7,018 E1 pairs in one pass (875 calls, $0.60; the daily limit did not stop it).
+- Pairs pass: luna agrees with sol .804 (the highest of any two judges), with DeepSeek .785, with haiku .767; 2-point gaps under 1%. luna is the strictest judge (share of 2s .154; sol .210).
+- Results pass: the new panel ranks dense > hybrid > sparse on all five metrics, and all 15 differences lie inside the old intervals. Absolute hit@5 drops .02–.04 (fewer 2s); nDCG and recall barely move.
+- By the outcome table: swap. luna, haiku and DeepSeek grade E1b and E3; E1 is quoted under the new panel next to E1b.
+- Open: validated on chunk grades only; the sol check on 30 E3 answers is still planned.
+
