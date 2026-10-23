@@ -64,7 +64,7 @@ flowchart TD
 | E2 | Does adding neighbouring clauses make a chunk answer the question? | no | no | **done 2026-10-23** (`rag/neighbours.py`); summary in the Log, details in `docs/experiments/` |
 | S | Judge swap: can gpt-6-luna replace gpt-6-sol in the panel? | no | no | **done 2026-10-23** (`rag/judge_swap.py`): passes, luna takes sol's seat; summary in the Log |
 | E1b | Cross-encoder reranker, retrieval only | no | no | after S |
-| E3 | End-to-end: does retrieval, a reranker or more context give better answers? | yes, one generator | no | after E1b; generator picked by the smoke test |
+| E3 | End-to-end: does retrieval, a reranker or more context give better answers? | yes, one generator | no | generator Typhoon; baseline, k = 10 and no-retrieval answers generated 2026-10-23, not scored; reranker variant after E1b |
 | E4 | Generator ablation | yes, 1–3 more generators | no | **optional**, if budget is left |
 | H | Confirm the panel's chunk grades; validate the judge on new answers | no | yes | when someone has time |
 
@@ -379,4 +379,4 @@ Details: [`docs/experiments/2026-10-23-judge-swap/`](../experiments/2026-10-23-j
 - Baseline with retries: `rag/out/runs/20261023-ablation-typhoon-dense-k5-v1-sr3` (25 new calls). 120 answers on the first try, 11 retried; 5 still hold 申报 after 4 tries (Q0035, Q0129, Q0368, which leaked on every retry before, and Q0336, Q0337 of set D, whose conversation changed with the retried turn). Answers differ from the raw run only where retried or later in set D; sources are identical.
 - k = 10 with retries: `rag/out/runs/20261023-ablation-typhoon-dense-k10-v1-sr3` (22 new calls). 9 answers retried; 4 still hold 申报 (Q0007, Q0129, Q0224, Q0368). Same pattern: changes only where retried or later in set D; sources identical. A retried answer reads as the raw one without the leak (Q0293). Configs from these runs say `+dirty` because the worktree's untracked links into the main checkout (`rag/out/dense`, `rag/out/llm_cache`) count; the code was committed.
 - No retrieval with retries: `rag/out/runs/20261023-ablation-typhoon-none-n1-sr3` (84 new calls). 37 answers retried; 14 still hold 申报 after 4 tries (Q0072 Q0107 Q0129 Q0216 Q0224 Q0298 Q0336 Q0342 Q0351 Q0352 Q0361 Q0363 Q0364 Q0368), against 5 at k = 5 and 4 at k = 10. Without sources the leak is about three times as common, so when scored, check whether the no-retrieval gap holds without the answers whose `foreign_script` is not empty. No [n]; changes only where retried or later in a set.
-- Next: scoring waits for the judge-swap decision. The raw runs (no `-sr3`) are not scored; they are the record of the leak and failure examples.
+- Next: score the three `-sr3` runs with the new panel (luna, haiku, DeepSeek; see Judge swap), and the reranker variant after E1b. The raw runs (no `-sr3`) are not scored; they are the record of the leak and failure examples.
