@@ -43,11 +43,16 @@ flowchart LR
 ```mermaid
 flowchart TD
     E1[E1 Ranking ablation<br/>dense / sparse / hybrid<br/>no generation] --> E2
-    E2[E2 Do neighbours help?<br/>re-grade small clauses<br/>no generation] --> E3
+    E2[E2 Do neighbours help?<br/>re-grade small clauses<br/>no generation] --> S
+    S[Judge swap<br/>luna in sol's seat?<br/>no generation] --> E1b
+    E1b[E1b Reranker<br/>no generation] --> E3
     E3[E3 End-to-end context ablation<br/>one fixed generator] --> E4
-    E4[E4 Generator ablation] --> F[Failure analysis + slides]
+    E4[E4 Generator ablation<br/>optional] --> F[Failure analysis + slides]
     E1 -. "best mode" .-> E3
-    E2 -. "neighbours in or out" .-> E3
+    E2 -. "neighbours out" .-> E3
+    S -. "panel" .-> E1b
+    S -. "panel" .-> E3
+    E1b -. "reranker in or out" .-> E3
     E3 -. "best context setup" .-> E4
     H[Human checks, when time allows<br/>confirm grades, validate judge] -.-> E1
     H -.-> E3
@@ -57,11 +62,13 @@ flowchart TD
 |---|---|---|---|---|
 | E1 | Ranking ablation: dense vs sparse vs hybrid | no | no | **done 2026-10-23** (`rag/pooled.py`); summary in the Log, details in `docs/experiments/` |
 | E2 | Does adding neighbouring clauses make a chunk answer the question? | no | no | **done 2026-10-23** (`rag/neighbours.py`); summary in the Log, details in `docs/experiments/` |
-| E3 | End-to-end: does better retrieval or context give better answers? | yes, one generator | no | needs the generator chosen |
-| E4 | Generator ablation | yes, 3–4 generators | no | needs the generator list |
+| S | Judge swap: can gpt-6-luna replace gpt-6-sol in the panel? | no | no | rules fixed 2026-10-23 (`rag/judge_swap.py`), luna grading the E1 pool |
+| E1b | Cross-encoder reranker, retrieval only | no | no | after S |
+| E3 | End-to-end: does retrieval, a reranker or more context give better answers? | yes, one generator | no | after E1b; generator picked by the smoke test |
+| E4 | Generator ablation | yes, 1–3 more generators | no | **optional**, if budget is left |
 | H | Confirm the panel's chunk grades; validate the judge on new answers | no | yes | when someone has time |
 
-How this maps to the assignment: **E1 (and E3) is the required ablation** (slides 6–7). **E3 and E4 give the required ≥ 2 metrics** (RAGAS faithfulness, RAGAS answer relevance, LLM-as-judge; slide 8). Failures found along the way feed slide 9.
+How this maps to the assignment: **E1 (and E3) is the required ablation** (slides 6–7). The reranker (E1b) is one of the assignment's optional extensions, next to hybrid + RRF. **E3 gives the required ≥ 2 metrics** (RAGAS faithfulness, RAGAS answer relevance, LLM-as-judge; slide 8). Failures found along the way feed slide 9.
 
 ## Question sets
 
@@ -162,6 +169,52 @@ A few hundred calls in all.
 
 ---
 
+## Judge swap (before E1b)
+
+**Why.** The budget is tight and gpt-6-sol is about 70% of every judge bill. gpt-6-luna is the same family at about a twentieth of the price. E1b only grades the chunks a variant adds, so sol would be cheap there; the saving is in E3, which grades answers. The swap is checked once, on E1's pool, so the check also tells us whether luna is a fit judge for E3.
+
+**Design.**
+1. luna (`judge-luna-or`: OpenRouter, reasoning effort medium as sol) grades the whole E1 pool, 7,018 pairs in E1's own batches (875 calls, about $0.6 at a measured $0.00067 a call).
+2. One pass. Questions go in a seeded random order and each batch is saved as it is graded, so a run cut off part way (OpenRouter's daily limit) leaves a random sample of fully graded questions; the check uses only those, for both panels. The third judge decides the panel grade on 37% of the pairs (haiku and DeepSeek differ, or both say 2), spread over 787 of the 875 batches, so grading those first would save nothing.
+3. `rag/judge_swap.py` compares, with rules fixed before luna's grades existed:
+
+| Level | Passes if |
+|---|---|
+| Pairs | luna's exact agreement with each of sol, haiku and DeepSeek ≥ .72 (the panel agrees .76–.79 within itself); 2-point gaps under 2%; luna's share of 2s at most sol's + .05 |
+| Results | E1 with the new panel (luna, haiku, DeepSeek; a 2 is the median) ranks the three modes in the same order on every metric, and each of the 15 differences between modes lies inside the old one's 95% interval |
+
+With haiku standing in for luna, the check passes (this is how the code was tested): a panel without sol already gives E1's ordering.
+
+**Outcomes and what we do.**
+
+| Outcome | Then |
+|---|---|
+| Both pass | luna, haiku and DeepSeek grade E1b and E3. E1 is reported under both panels; E1b is compared with E1 under the new one. sol's two-route caveat goes away in the new-panel numbers. |
+| Pairs pass, results move | Swap anyway. E1 is reported under both panels and only what holds under both is stated; the moving gap is itself reported as judge-dependent. |
+| Pairs fail (low agreement or much more lenient) | No swap. E1b keeps sol (about $3–4). E3 runs with haiku and DeepSeek, a 2 needing both, and sol scores a sample of answers. |
+| Cut off part way | The check runs on the questions graded in full. Under about 100 questions, the result level is reported but not used to decide; the pair level decides. |
+
+From the swap on, luna is a judge and not a generator: it would grade its own answers.
+
+## E1b Cross-encoder reranker (retrieval only)
+
+**Question.** Does reading the question and the chunk together (a cross-encoder) rank answering chunks higher than comparing two separate vectors (bge-m3)? On dev, 7 of 13 misses had an answering chunk at ranks 6–50.
+
+**Design.**
+- Variant: dense top 50 → a multilingual cross-encoder (`BAAI/bge-reranker-v2-m3`, runs on CPU) → top 10. The candidates are dense's own, so only the order changes: the effect is the reranker's alone.
+- Added to E1's pool as a variant (`rag/pooled.py`): only the chunks nobody graded are graded, by the panel S settles on. Expected about 3–5 new chunks per question, about one call per question per judge.
+- Metrics and intervals as in E1, against dense, per question.
+
+**Outcomes and what we do.**
+
+| Outcome | Then |
+|---|---|
+| Reranker above dense, beyond the interval | Into E3. Explain per category; read the questions where a 2 moves into the top 5. |
+| No measurable difference | Still into E3 (the answers may differ). Report that cross-encoding does not fix the colloquial-to-formal wording gap. |
+| Reranker clearly below dense | Out of E3, to save its cost; report E1b as it is. |
+
+---
+
 ## E3 End-to-end context ablation
 
 **Question.** Do the retrieval and context changes give **better answers**? Retrieval metrics alone cannot show this. More chunks change only what the generator sees, not the ranking, so E1-style metrics cannot measure that at all.
@@ -170,12 +223,20 @@ A few hundred calls in all.
 
 **Design.** One fixed generator, the ablation subset, k = 5 unless stated. Each variant produces a run; the panel scores every answer.
 
-| Variant | Shows |
-|---|---|
-| Baseline: best mode from E1 (dense, weakly) | |
-| The other main mode (hybrid) | whether E1's ranking gap carries over to the answers |
-| ~~Baseline + neighbours~~ dropped after E2 (+.06 on clauses, below the 10-point rule) | |
-| Baseline, k = 10 | whether **more context** helps: on dev, 7 of 13 misses had an answering chunk at ranks 6–50 |
+| Variant | Shows | Priority |
+|---|---|---|
+| No retrieval (the generator answers without sources) | a lower bound: what retrieval adds. Faithfulness does not apply; the rubric is graded against the baseline's chunks, so "correct" means the same in every variant | must |
+| Baseline: dense (E1, weakly) | | must |
+| Dense + reranker (E1b) | whether E1b's gain reaches the answers | unless E1b rules it out |
+| Baseline, k = 10 | whether **more context** helps or lookalikes distract | should |
+| Hybrid | whether E1's near-tie carries over to the answers | drop first |
+| ~~Baseline + neighbours~~ dropped after E2 (+.06 on clauses, below the 10-point rule) | | |
+
+**Generator.** One open model from a family none of the judges is in, picked by E4's smoke test (about 8 dev questions per candidate, read, not scored). Not luna: it judges from the swap on.
+
+**Judge check.** If S swaps, sol scores 30 E3 answers spread over the variants (about $1–1.5); report luna against sol and the new panel against the old on grounded, correct and useful.
+
+**Cost** (new panel, about 130 questions a variant): about $1.2 per variant; 4–5 variants about $6–7.5.
 
 **Metrics.**
 - RAGAS **faithfulness**: share of the answer's claims supported by the retrieved text.
@@ -187,18 +248,21 @@ All per category, compared per question.
 
 **Assumptions.**
 
-- The generator is the same in every variant, so a judge that favours its own model family adds the same amount everywhere and cancels out in the comparison.
+- The generator is the same in every variant and from another family than the judges, so no judge grades its own model's answers.
 - About 130 questions are enough to see a difference of a few tenths on the 0–2 scales; anything smaller is reported as noise.
 
 **Outcomes and what we do.**
 
 | Outcome | Then |
 |---|---|
-| The mode that won E1 also gives better answers | E1's retrieval grades predict answer quality, so later ranking changes (a reranker) can be screened with E1 alone, cheaply. |
-| E1's winner does **not** give better answers | Retrieval grades are not a good proxy here. Look at whether the generator ignores good chunks (the earlier "answer in the top 5 but wrong" case). Later retrieval changes must be tested end to end. |
+| No retrieval far below baseline | Retrieval matters; give the size per category. |
+| No retrieval about baseline on "correct" | The generator already knows Thai tax. The difference is in faithfulness and citations; show per category where it gives outdated tax-year figures. |
+| Reranker better in E1b and in E3 | E1-style grades predict answers, so later ranking changes can be screened with E1 alone, cheaply. Adopt the reranker for the demo. |
+| Reranker better in E1b but not in E3 | The generator is the bottleneck, or the panel's leniency hides it. Read the questions where a 2 moved into the top 5 but the answer did not improve. Later retrieval changes must be tested end to end. |
+| Dense and hybrid differ in E3 although E1 was a near-tie | Read those questions: the generator reacts to something the chunk grades miss (lookalikes, order). |
 | k = 10 above baseline | Adopt k = 10; check per category whether the gain comes from questions whose answering chunk was at ranks 6–10 in E1. |
 | k = 10 below baseline | Extra chunks distract the generator (lookalikes graded 1, see E1); keep k = 5 and report it. |
-| Nothing beats baseline | Keep the baseline. Report what was tried and why it did not help. |
+| Nothing differs beyond noise | Keep the baseline. Report the smallest difference about 100 content questions can show, and what was tried. |
 
 ---
 
@@ -243,8 +307,9 @@ None of these block E1–E4. Each turns a judged number into a checked one.
 
 | Decision | Options | Needed by |
 |---|---|---|
-| Generator for E3 | The model the demo will use. An open model is cleaner for reporting; the GPT stand-in also works, since the generator is held fixed | E3 |
-| Generator list for E4 | Small open, mid open, small GPT, Thai-tuned pair | E4 |
+| Generator for E3 | Decided: an open model from a family none of the judges is in, picked by the smoke test; not luna (a judge after S) | E3 |
+| Generator list for E4 | Optional now; if budget is left, one or two more generators on E3's baseline context | E4 |
+| Judge panel from E1b on | Decided: luna in sol's seat if S passes | E1b |
 | E2 threshold | 10 points over the noise floor, as proposed; not met (+.06 on clauses) | done |
 | Neighbour definition | Used: the other parts of the same unit, then sibling units under the same parent (nearest first, next before previous), at most 512 extra tokens | done |
 | Corpus gaps (Q0111 general mutual-fund gains, Q0145 documents for a first online filing) | Report only (proposed: adding sources would move chunk ids) | before E1 |
@@ -285,3 +350,9 @@ Details: [`docs/experiments/2026-10-23-e2-neighbours/`](../experiments/2026-10-2
 - Only 17 of 123 distinct chunks gain; neighbours do not dilute good chunks (dilution .00).
 - By the outcome table: below the 10-point rule, a small real effect on clauses. The 1s are mostly on-topic misses, not clauses missing a condition next door. Neighbours are out of E3; the k = 10 control stays.
 - Open: E2 measures the panel's chunk grades, not answers; the later-part result rests on 12 chunks. Sol stopped once on OpenRouter's credit limit (217 of 314 calls were cached and reused).
+
+### Judge swap rules fixed (2026-10-23)
+
+- Budget is tight: luna replaces sol from E1b on if it passes the check in "Judge swap". Rules and outcome table written, and `rag/judge_swap.py` tested with haiku standing in for luna, before luna graded anything.
+- OpenRouter's key had $0.34 of its $8 daily limit left at the start, enough for about 500 of the 875 calls; the pass is ordered so a cutoff leaves a random sample of whole questions.
+- E3 revised: no-retrieval lower bound and a reranker (E1b) added; hybrid is the first variant to drop; the generator is an open model; E4 is optional.

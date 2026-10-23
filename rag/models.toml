@@ -76,3 +76,12 @@ backend = "openrouter"
 model = "openai/gpt-6-sol"
 params = { reasoning_effort = "medium", max_tokens = 6000 }  # a small cap: the key's spend limit is checked against the largest possible reply
 rpm = 18  # OpenRouter limits new accounts to 20 requests per minute on this model
+
+# gpt-6-luna as a judge, through OpenRouter (2026-10-23): replaces sol in the panel from E1b on, to cut cost (about a
+# twentieth of sol's price). Same family and reasoning effort as sol; checked against sol on the whole E1 pool before
+# it is used (rag.judge_swap, plan: "Judge swap"). Not a generator from then on: it would grade its own answers.
+[models.judge-luna-or]
+backend = "openrouter"
+model = "openai/gpt-6-luna"
+params = { reasoning_effort = "medium", max_tokens = 6000 }
+rpm = 18
