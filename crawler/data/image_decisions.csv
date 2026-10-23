@@ -4,7 +4,7 @@ image_id,decision,title,note,decided_at,source,verified,tax_year
 40339_1_Banner-RD-Call-Center-New,drop,,banner,2026-10-18,ocr,,
 43338_0_PIT_TAX,drop,,title banner,2026-10-18,ocr,,
 550_0_pegka2,drop,,decorative curly brace,2026-10-18,ocr,,
-558_0_web,drop,,screenshot of the online filing steps; the page text carries them,2026-10-18,ocr,,
+558_0_web,keep,ขั้นตอนการยื่นแบบภาษีทางอินเทอร์เน็ต 7 ขั้นตอน (ภาพ),"7-step e-Filing flow, the current procedure; the page text has only the older e-FILING steps and ends at a bare payment heading with the steps missing (flagged by a reviewer on Q0145). Text transcribed from the image by Claude, compared with the image by a person 2026-10-23",2026-10-23,manual,2026-10-23,
 62777_0_cc3,keep,"ตัวอย่างการลดหย่อนเบี้ยประกันชีวิตแบบบำนาญ รวม 300,000 บาท (ตารางในภาพ)",worked example of the life-insurance deduction on the Clear Cut allowance page; OCR matches the image; not yet checked by a person,2026-10-22,ocr,,
 62777_1_cc1,keep,"ตัวอย่างการลดหย่อนเบี้ยประกันชีวิตและแบบบำนาญ รวม 250,000 บาท (ตารางในภาพ)",worked example of the life-insurance deduction on the Clear Cut allowance page; OCR matches the image; not yet checked by a person,2026-10-22,ocr,,
 62777_2_cc2,keep,ตัวอย่างรายการลดหย่อนบริจาค 1 เท่า และ 2 เท่า (ตารางในภาพ),"donation table; Typhoon put the check marks of rows 6 and 7 under 1 เท่า, the image has them under 2 เท่า, so the text was corrected by hand; not yet checked by a person",2026-10-22,manual,,

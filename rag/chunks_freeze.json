@@ -1,13 +1,18 @@
 {
-  "frozen_at": "2026-10-22",
-  "corpus_commit": "d821564",
-  "chunks": 2069,
-  "sha256": "1a15b8c2ed669b68adcb37dc4e8288d7f6bf121e96220e7037e6059cf01c40ee",
+  "frozen_at": "2026-10-23",
+  "corpus_commit": "d821564 + 558_0_web image unit",
+  "chunks": 2070,
+  "sha256": "f6caa726665336e72aff1b182181bf5a08dd9f7a9a39fcf5d56673a413c4e45f",
   "tokenizer": "BAAI/bge-m3",
   "max_tokens": 512,
   "window_tokens": 384,
   "note": "Chunk ids are frozen: qrels key on them. Regenerating chunks.jsonl changes this hash and fails rag/tests/test_chunk.py; update this file only on purpose, with the qrels re-mapped.",
   "earlier": [
+    {
+      "chunks_sha": "1a15b8c2ed66",
+      "commit": "41dd570",
+      "note": "2026-10-22 freeze, 2,069 chunks, before the 558_0_web image unit was added; no run has been made with it"
+    },
     {
       "chunks_sha": "95bba22006ba",
       "commit": "482191b",
