@@ -32,6 +32,7 @@ import hashlib
 import json
 import math
 import random
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from itertools import combinations
 from pathlib import Path
@@ -128,26 +129,43 @@ def missing(items: list[dict], done: list[dict]) -> dict[str, list[str]]:
     return {it["id"]: ids for it in items if (ids := [e["chunk_id"] for e in it["pool"] if (it["id"], e["chunk_id"], e["text_sha1"]) not in have])}
 
 
-def grade(judge_name: str, items: list[dict], done: list[dict], chunks: dict[str, dict]) -> list[dict]:
-    """The judge's grades for the pairs not in `done` (rows of id, chunk_id, text_sha1, grade); a batch it fails twice is skipped."""
+def grade(judge_name: str, items: list[dict], done: list[dict], chunks: dict[str, dict], save=None) -> list[dict]:
+    """The judge's grades for the pairs not in `done` (rows of id, chunk_id, text_sha1, grade); a batch it fails twice is skipped.
+    Questions go in a seeded random order and `save(rows)` gets each batch as it is graded, so a run cut off part way
+    (out of credit) leaves a random sample of fully graded questions. Any other API error stops the run there."""
     ask = evaluate.make_ask(llm.profile(judge_name))
     by_id = {it["id"]: it for it in items}
     todo = missing(items, done)
-    jobs = [(q, ids) for q, all_ids in todo.items() for ids in batches(all_ids, q)]
+    order = sorted(todo)
+    random.Random(SEED).shuffle(order)
+    jobs = [(q, ids) for q in order for ids in batches(todo[q], q)]
     sha = {(it["id"], e["chunk_id"]): e["text_sha1"] for it in items for e in it["pool"]}
+    stop = threading.Event()
 
     def run(job):
         q, ids = job
+        if stop.is_set():
+            return q, {}
         it = by_id[q]
         try:
             return q, grade_batch(ask, dict(question=it["question"]), earlier_turns(it), [chunks[c] for c in ids])
         except ValueError as e:  # a reply unusable twice: leave the batch for the next run, keep the others
             print(f"{judge_name}: {q} batch of {len(ids)} not graded: {e}")
             return q, {}
+        except Exception as e:  # out of credit, rate limit, network: stop asking, keep what is saved
+            if not stop.is_set():
+                print(f"{judge_name}: stopped at {q}: {type(e).__name__}: {e}")
+            stop.set()
+            return q, {}
 
+    out = []
     with ThreadPoolExecutor(evaluate.WORKERS) as ex:
-        got = list(ex.map(run, jobs))
-    return [dict(id=q, chunk_id=c, text_sha1=sha[q, c], grade=g) for q, rows in got for c, g in rows.items()]
+        for q, rows in ex.map(run, jobs):
+            new = [dict(id=q, chunk_id=c, text_sha1=sha[q, c], grade=g) for c, g in rows.items()]
+            if save and new:
+                save(new)
+            out += new
+    return out
 
 
 def panel_grades(per_judge: dict[str, list[dict]], items: list[dict], strict: bool) -> dict[str, dict[str, int]]:
@@ -331,8 +349,10 @@ def main() -> None:
         to_grade += calls
         print(f"{j}: {n_pairs - sum(map(len, todo.values()))} pairs graded, {calls} calls to go")
         if not (a.dry or a.report) and todo:
-            done += grade(j, items, done, chunks)
-            path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in done), encoding="utf-8")
+            def save(rows, path=path):
+                with path.open("a", encoding="utf-8") as f:
+                    f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
+            done += grade(j, items, done, chunks, save)
         per_judge[j] = done
     if a.dry or (a.report and to_grade):
         if a.report and to_grade:
