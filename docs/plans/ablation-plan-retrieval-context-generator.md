@@ -299,3 +299,29 @@ Code `rag/pooled.py`, outputs `rag/out/pooled/`.
 
 **Skipped batches**
 - A batch a judge answers badly twice is skipped and retried on the next run: one each for haiku and deepseek, both graded since.
+
+### Pending investigation: why hybrid does not beat dense (not run)
+
+Dense-wins cases read: Q0021, Q0057, Q0062, Q0065, Q0106 (first lines of the chunks only), plus the retriever code.
+
+**Cause 1, structural (checked on all 339 queries)**
+- With RRF_K = 60 and DEPTH = 50, hybrid ranks every chunk both lists found above every chunk only one found. The best a single list gives is 1/61 = 0.0164; the least a both-lists chunk gives is 2/110 = 0.0182.
+- 0 cases in 339 where a one-list chunk outranks a both-lists chunk. On average 96% of hybrid's top 5 are both-lists chunks (33 questions have fewer than 5, where one-list chunks enter).
+- So a chunk dense ranks 1st is lost whenever BM25 has it below its top 50 and five other chunks overlap. A k below about 48 makes rank count again.
+
+**Cause 2, lookalikes (5 cases read)**
+- The chunks both rankings share and hybrid puts first are lookalikes graded 1: worked examples with the same numbers (Q0021, คำสั่ง ป.96/2543), neighbouring deduction rules (Q0057, Q0062), other clauses of one decree (Q0106).
+
+**Lead 3, chunking (untested)**
+- Every clause chunk of a decree carries the decree's title in its header. For Q0106 the title contains the query word (คริปโทเคอร์เรนซี), so all of the decree's clauses match it. Whether the header text is the cause is not checked.
+
+**Limits**
+- 5 of the 30 dense-wins read; the k effect is arithmetic plus the 0/339 check, not a measured gain.
+
+**Planned variant: k = 10, declared before it is scored**
+- k = 5, 20 and 30 only as a sensitivity table, not to choose k on these grades (they are the E1 grades).
+- Pairs to grade (count made on the same pool and chunk hashes): k = 5: 0; **k = 10: 1** (1 question, 1 call per judge); k = 20: 6; k = 30: 3. The hybrid top 5 changes on 301 of 339 questions at k = 10. Scoring costs a few cents and needs no re-grade.
+
+**Not done**
+- Adding k as a variant in `rag/pooled.py`, the one missing grade, the sensitivity table, reading about 10 more cases, the header test.
+- Until then E3's baseline stays an open choice between dense and hybrid k = 60.
