@@ -152,3 +152,16 @@ def test_backend_rpm_is_shared_by_its_models_and_a_profile_rpm_is_its_own(monkey
         with pytest.raises(RuntimeError):
             llm._complete(p, [], {}, False)
     assert spaced == [(("t", "k"), 190), (("t", "k"), 190), (("m-y",), 18)]
+
+
+def test_attempt_zero_keeps_the_old_cache_key_and_a_retry_gets_its_own(monkeypatch, tmp_path):
+    monkeypatch.setenv("A_KEY", "secret")
+    p = llm.profile("judge", CONFIG)
+    msg = [{"role": "user", "content": "ถาม"}]
+    assert llm.cache_key(p, msg, {}, False, 0) == llm.cache_key(p, msg, {}, False)
+    assert len({llm.cache_key(p, msg, {}, False, a) for a in (0, 1, 2)}) == 3
+    monkeypatch.setattr(llm, "CACHE", tmp_path)
+    sent = []
+    monkeypatch.setattr(llm, "_complete", lambda p, m, params, j: sent.append(params) or (f"ตอบ{len(sent)}", "m", {}, "stop"))
+    assert [llm.chat(p, msg, attempt=a).text for a in (0, 1, 0)] == ["ตอบ1", "ตอบ2", "ตอบ1"]
+    assert sent == [{"temperature": 0}] * 2  # the attempt is not sent to the backend

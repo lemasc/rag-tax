@@ -96,10 +96,13 @@ def profile(name: str, config: dict | None = None) -> Profile:
                    params=dict(m.get("params", {})), json_mode=b.get("json_mode", False), rpm=m.get("rpm"), backend_rpm=b.get("rpm"))
 
 
-def cache_key(p: Profile, messages: list[dict], params: dict, json_out: bool) -> str:
+def cache_key(p: Profile, messages: list[dict], params: dict, json_out: bool, attempt: int = 0) -> str:
     """Identity of a request. The key and the profile name are left out: the same request through another key or
-    profile name is the same request."""
+    profile name is the same request. `attempt` > 0 is a deliberate new try of the same request (not sent to the
+    backend); attempt 0 keeps the key every earlier call was cached under."""
     req = dict(base_url=p.base_url, model=p.model, messages=messages, params=params, json=json_out)
+    if attempt:
+        req["attempt"] = attempt
     return hashlib.sha256(json.dumps(req, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
 
@@ -134,11 +137,13 @@ def _complete(p: Profile, messages: list[dict], params: dict, json_out: bool) ->
     return r.choices[0].message.content or "", r.model, usage, r.choices[0].finish_reason
 
 
-def chat(p: Profile | str, messages: list[dict], *, json_out: bool = False, use_cache: bool = True, **params) -> Reply:
-    """Send a chat request. `params` override the profile's parameters for this call."""
+def chat(p: Profile | str, messages: list[dict], *, json_out: bool = False, use_cache: bool = True, attempt: int = 0,
+         **params) -> Reply:
+    """Send a chat request. `params` override the profile's parameters for this call. A caller that rejects a reply
+    asks again with the next `attempt`, which is cached on its own."""
     p = profile(p) if isinstance(p, str) else p
     params = p.params | params
-    key = cache_key(p, messages, params, json_out)
+    key = cache_key(p, messages, params, json_out, attempt)
     path = CACHE / key[:2] / f"{key}.json"
     if use_cache and path.exists():
         c = json.loads(path.read_text(encoding="utf-8"))
@@ -161,7 +166,7 @@ def chat(p: Profile | str, messages: list[dict], *, json_out: bool = False, use_
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(dict(
         profile=p.name, backend=p.backend, base_url=p.base_url, model=p.model, served_model=served, params=params,
-        params_used=used, finish_reason=finish, json=json_out, messages=messages, text=text, usage=usage, seconds=seconds,
+        params_used=used, finish_reason=finish, json=json_out, attempt=attempt, messages=messages, text=text, usage=usage, seconds=seconds,
         at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     ), ensure_ascii=False, indent=1), encoding="utf-8")
     tmp.replace(path)

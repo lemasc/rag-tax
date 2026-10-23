@@ -2,6 +2,7 @@
 
 import pytest
 
+from rag import answer as A, llm
 from rag.answer import SYSTEM, SYSTEM_NO_SOURCES, citations, messages_for, retrieval_query, source_block, strip_thinking, year_label
 from rag.questions import Question
 
@@ -59,3 +60,31 @@ def test_no_retrieval_sends_the_bare_question_under_the_no_sources_prompt():
                         {"role": "user", "content": "ต้องยื่นไหม"}]
     assert "[n]" not in SYSTEM_NO_SOURCES and "เอกสารอ้างอิงที่ให้มา" not in SYSTEM_NO_SOURCES
     assert citations("ตอบ [1]", []) == ([], [1])  # any [n] without sources is a bad citation
+
+
+def _replies(monkeypatch, texts):
+    calls = []
+
+    def fake(p, messages, attempt=0):
+        calls.append(attempt)
+        return llm.Reply(texts[attempt], "m", {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}, cached=False, seconds=1.0)
+
+    monkeypatch.setattr(llm, "chat", fake)
+    return calls
+
+
+def test_an_answer_in_chinese_script_is_asked_again_until_clean(monkeypatch):
+    calls = _replies(monkeypatch, ["ต้อง申报ภาษี [1]", "ต้องยื่นแบบ [1]", "ไม่ถูกถาม"])
+    text, _, r, replies = A.answer(None, "ถาม", HITS, script_retries=3)
+    assert (text, calls, len(replies)) == ("ต้องยื่นแบบ [1]", [0, 1], 2) and r is replies[-1]
+
+
+def test_retries_stop_at_the_limit_and_keep_the_last_answer(monkeypatch):
+    calls = _replies(monkeypatch, ["申报 1", "申报 2", "申报 3"])
+    text, _, _, replies = A.answer(None, "ถาม", HITS, script_retries=2)
+    assert (text, calls) == ("申报 3", [0, 1, 2]) and A.FOREIGN.findall(text) == ["申报"]
+
+
+def test_without_retries_a_foreign_answer_is_kept(monkeypatch):
+    calls = _replies(monkeypatch, ["申报"])
+    assert A.answer(None, "ถาม", HITS)[0] == "申报" and calls == [0]
