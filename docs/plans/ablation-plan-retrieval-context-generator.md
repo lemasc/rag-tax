@@ -361,3 +361,35 @@ Dense-wins cases read: Q0021, Q0057, Q0062, Q0065, Q0106 (first lines of the chu
 - Caveat: recall@10 is relative to a pool whose fused top 10 always takes some chunks from the weaker ranking.
 
 **Not done:** tokenization and synonym test, header test.
+
+### Tokenization, mapping and header tests (retrieval only)
+
+Scratch scripts, no LLM calls; nothing in the repo or the frozen chunks changed. All scored on the E1 grades, so a chunk a variant brings in that nobody graded counts as "not a 2". The hit@5 below are lower bounds, and variants that bring in many ungraded chunks are the most underrated. The base rows reproduce E1 exactly (sparse hit@5 .504, hybrid .699).
+
+**(a) Sparse input**
+
+| variant | sparse hit@5 | hybrid k = 60 | hybrid k = 10 | dense 2 in sparse top 50 (of 30 dense-wins) |
+|---|---|---|---|---|
+| current newmm | .504 | .699 | .699 | 6 |
+| newmm + colloquial-to-formal query mapping | .516 | .699 | .708 | 7 |
+| character 3-grams | .504 | .676 | .705 | 11 (4 in the top 10) |
+| character 4-grams | .472 | .681 | .684 | 12 |
+
+- The mapping (พ่อแม่ → บิดา มารดา, ลูก → บุตร, ภรรยา → ภริยา and a few more) was written after reading the failures, so this is a best case, and it is a no-op.
+- Chunk and query are tokenized the same way, so compounds such as ฐานภาษี do match. The earlier worry that splitting hurts was wrong.
+- N-grams reach more dense answers but bring about 5 ungraded chunks per question into the top 10 (848 new pairs for 3-grams at k = 60, 629 at k = 10). Unresolved, not graded.
+
+**(b) Header test** (document title removed from the indexed text of every chunk, sparse and dense, on the GPU)
+- Variant B strips the title only where a section or unit label remains, because 275 of the 2,070 chunks have a header that is only the title.
+- **Q0106 is fixed** (the crypto clause): dense rank 5 → 1, sparse outside the top 50 → 4, hybrid 12 → 1. This confirms the mechanism for decree clauses that share a title containing the query word.
+- Over all questions the known hit@5 barely moves: dense .717 → .714 / .705; hybrid k = 60 .699 → .702 / .702. Per-question changes balance (dense +15 / −19; hybrid k = 60 +7 / −6 for variant B).
+- 758–870 ungraded chunks enter dense's top 10, so a small gain or loss is hidden; grading them would take about 760–870 pairs.
+- The 30 dense-wins stay mostly unfixed (dense 2 in sparse's top 50: 8 of 30, was 6).
+
+**Reading the four tests together** (RRF k, tokenization, mapping, header)
+- None closes the dense-over-hybrid gap, which is small (nDCG@10 −0.03, hit@5 −0.02 inside the interval).
+- Hypothesis, not shown: BM25 contributes little on these colloquial questions because they share few words with the formal chunk text, and RRF gives it an equal vote.
+
+**Decision for E3 (pending the user's confirmation):** baseline dense, with hybrid k = 60 as the other-mode variant (the plan's outcome row "a single mode beats hybrid", weakly).
+
+**Not done, not planned:** grading the n-gram and title-less variants (about 760–870 pairs each); a stronger query rewrite, for example an LLM expansion.
