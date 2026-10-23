@@ -1,6 +1,6 @@
 # Investigation: why hybrid does not beat dense
 
-Status: retrieval-side tests finished 2026-10-23; **the E3 baseline decision at the end is not yet confirmed**, so the plan holds no summary of this yet. Follows [E1](../2026-10-23-e1-ranking-ablation/README.md). Scratch scripts for the tests live outside the repo; nothing in the frozen chunks changed.
+Status: done 2026-10-23; the E3 baseline decision at the end is confirmed (dense), and the plan's Log has a summary. Follows [E1](../2026-10-23-e1-ranking-ablation/README.md). Scratch scripts for the tests live outside the repo; nothing in the frozen chunks changed.
 
 Entries are in the order they were done. Here "k" (RRF_K, "hybrid k = 10") is the RRF fusion constant, not the number of chunks the generator sees (the "k = 10" of E3 in the plan).
 
@@ -95,6 +95,6 @@ Scratch scripts, no LLM calls; nothing in the repo or the frozen chunks changed.
 - None closes the dense-over-hybrid gap, which is small (nDCG@10 −0.03, hit@5 −0.02 inside the interval).
 - Hypothesis, not shown: BM25 contributes little on these colloquial questions because they share few words with the formal chunk text, and RRF gives it an equal vote.
 
-**Decision for E3 (pending the user's confirmation):** baseline dense, with hybrid k = 60 as the other-mode variant (the plan's outcome row "a single mode beats hybrid", weakly).
+**Decision for E3 (confirmed 2026-10-23):** baseline dense, with hybrid k = 60 as the other-mode variant (the plan's outcome row "a single mode beats hybrid", weakly). After E1b, dense + reranker joins as the main variant compared with dense, and hybrid is the first variant to drop.
 
 **Not done, not planned:** grading the n-gram and title-less variants (about 760–870 pairs each); a stronger query rewrite, for example an LLM expansion.

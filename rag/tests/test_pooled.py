@@ -74,3 +74,30 @@ def test_add_variant_puts_only_new_chunks_into_the_pool_and_modes_of_lists_it():
     assert [e["chunk_id"] for e in item["pool"]] == ["a", "b"] and ranking(item, "hybrid-k10") == ["a", "b", "b"]
     assert modes_of([item]) == ["dense", "sparse", "hybrid", "hybrid-k10"] and ranking(item, "dense") == ["a"]
     assert modes_of([item, dict(item, variants={})]) == ["dense", "sparse", "hybrid"]  # only variants every question has
+
+
+def test_modes_of_orders_rrf_variants_by_k_then_the_others():
+    from rag.pooled import modes_of
+    items = [dict(variants={"hybrid-k20": [], "dense-rerank": [], "hybrid-k5": []})]
+    assert modes_of(items) == ["dense", "sparse", "hybrid", "hybrid-k5", "hybrid-k20", "dense-rerank"]
+
+
+def test_rerank_orders_dense_candidates_by_the_cross_encoder(monkeypatch):
+    import sys
+    import types
+    from rag import pooled
+
+    class Fake:
+        def __init__(self, *a, **kw):
+            pass
+
+        def predict(self, pairs, batch_size):
+            return [float(p[1].endswith("c")) for p in pairs]  # only chunk c "answers"
+
+    monkeypatch.setitem(sys.modules, "sentence_transformers", types.SimpleNamespace(CrossEncoder=Fake))
+    monkeypatch.setattr(pooled, "passage", lambda c: c["text"])
+    chunks = [dict(chunk_id=x, text=f"text {x}") for x in "abc"]
+    retriever = types.SimpleNamespace(chunks=chunks, rankings=lambda q: ([0, 1, 2], [], []))
+    item = dict(query="q", pool=[dict(chunk_id="a", text_sha1="x")])
+    assert pooled.build_rerank(retriever, [item]) == 2  # b and c are new to the pool
+    assert item["variants"]["dense-rerank"][0] == "c"

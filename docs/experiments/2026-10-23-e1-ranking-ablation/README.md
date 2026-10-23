@@ -42,5 +42,8 @@ Status: done 2026-10-23. Plan: [`../../plans/ablation-plan-retrieval-context-gen
 - Exact agreement between judges is 76–79% and 2-point gaps are under 1%: the tier gap is small on these pairs.
 - Share of 0/1/2: sol .39/.40/.21, haiku .38/.45/.17, deepseek .45/.37/.18. All three say 2 for 12% of pairs, at least one for 26%.
 
+**Later re-scoring**
+- The numbers above are the old panel (sol, haiku, DeepSeek) and stay as published. E1 was re-scored with luna in sol's seat ([judge swap](../2026-10-23-judge-swap/README.md)): same order of modes, all differences inside these intervals. E1b then grew the pool with the reranker's chunks ([E1b](../2026-10-23-e1b-reranker/README.md)), which lowers every mode's pool-relative nDCG and recall.
+
 **Skipped batches**
 - A batch a judge answers badly twice is skipped and retried on the next run: one each for haiku and deepseek, both graded since.

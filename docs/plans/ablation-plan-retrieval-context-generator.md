@@ -7,9 +7,9 @@ Status: draft 2026-10-23. Tracks what we run next, and why, now that the corpus 
 | Done | Not done |
 |---|---|
 | Corpus settled; **2,070 chunks frozen** from 173 documents (a test fails if they change) | Any answer run on the frozen chunks. Both earlier dev runs, their human labels and the top-50 diagnostic were made on the **old** chunks, so they are background, not results |
-| Retrieval: dense (bge-m3), sparse (BM25), hybrid (RRF) | E3 onward (E1 and E2 are done, see the Log) |
+| Retrieval: dense (bge-m3), sparse (BM25), hybrid (RRF), a cross-encoder reranker on dense's top 50 | E3 onward (E1, E2, the judge swap and E1b are done, see the Log) |
 | Generation (`rag/answer.py`) and a demo (`demo.py`) | A generator we can report: the only one so far is a GPT dev stand-in, from the same family as one judge |
-| Answer scoring: RAGAS faithfulness, RAGAS answer relevance, rubric judge; a three-judge panel checked against human labels | Ablations, failure analysis, slides, the AI audit in the course template |
+| Answer scoring: RAGAS faithfulness, RAGAS answer relevance, rubric judge; a three-judge panel checked against human labels (with sol; luna in sol's seat is checked on chunk grades only) | Ablations, failure analysis, slides, the AI audit in the course template |
 
 **Constraint:** people have little review time right now. Everything on the critical path below runs without a person; human checks are listed separately and make the same results stronger when done.
 
@@ -36,7 +36,7 @@ flowchart LR
 ```
 
 - **Chunks** are one structural unit when it fits (a FAQ item, a มาตรา, a ข้อ or an `(N)` item of a legal instrument, a guide section), at most 512 tokens. Legal clauses are the smallest: median 148 tokens, 189 under 100. Each chunk's header carries the document title and the parent clause's opening words.
-- **Judge panel**: three LLM judges from different families (`gpt-6-sol`, Claude Haiku 5.5, DeepSeek V4.1 Flash), combined by median. On the dev labels it agreed with people about as well as people agree with each other, but it is more lenient than people on hard questions: in the top-50 diagnostic people kept 25 of 132 chunks the panel called "answers it". So panel numbers are reliable for **comparing variants** (the same judges grade every variant) and too generous as **absolute** numbers.
+- **Judge panel**: three LLM judges from different families, combined by median: `gpt-6-sol`, Claude Haiku 5.5, DeepSeek V4.1 Flash for E1 and E2; from E1b on, `gpt-6-luna` in sol's seat (see Judge swap). On the dev labels it agreed with people about as well as people agree with each other, but it is more lenient than people on hard questions: in the top-50 diagnostic people kept 25 of 132 chunks the panel called "answers it". So panel numbers are reliable for **comparing variants** (the same judges grade every variant) and too generous as **absolute** numbers.
 
 ## Plan at a glance
 
@@ -63,8 +63,8 @@ flowchart TD
 | E1 | Ranking ablation: dense vs sparse vs hybrid | no | no | **done 2026-10-23** (`rag/pooled.py`); summary in the Log, details in `docs/experiments/` |
 | E2 | Does adding neighbouring clauses make a chunk answer the question? | no | no | **done 2026-10-23** (`rag/neighbours.py`); summary in the Log, details in `docs/experiments/` |
 | S | Judge swap: can gpt-6-luna replace gpt-6-sol in the panel? | no | no | **done 2026-10-23** (`rag/judge_swap.py`): passes, luna takes sol's seat; summary in the Log |
-| E1b | Cross-encoder reranker, retrieval only | no | no | after S |
-| E3 | End-to-end: does retrieval, a reranker or more context give better answers? | yes, one generator | no | generator Typhoon; baseline, k = 10 and no-retrieval answers generated 2026-10-23, not scored; reranker variant after E1b |
+| E1b | Cross-encoder reranker, retrieval only | no | no | **done 2026-10-23** (`rag/pooled.py --rerank`): reranker beats dense clearly, goes into E3; summary in the Log |
+| E3 | End-to-end: does retrieval, a reranker or more context give better answers? | yes, one generator | no | generator Typhoon; baseline, k = 10 and no-retrieval answers generated 2026-10-23, not scored; reranker variant (E1b: dense + reranker) not generated yet |
 | E4 | Generator ablation | yes, 1–3 more generators | no | **optional**, if budget is left |
 | H | Confirm the panel's chunk grades; validate the judge on new answers | no | yes | when someone has time |
 
@@ -201,9 +201,12 @@ From the swap on, luna is a judge and not a generator: it would grade its own an
 **Question.** Does reading the question and the chunk together (a cross-encoder) rank answering chunks higher than comparing two separate vectors (bge-m3)? On dev, 7 of 13 misses had an answering chunk at ranks 6–50.
 
 **Design.**
-- Variant: dense top 50 → a multilingual cross-encoder (`BAAI/bge-reranker-v2-m3`, runs on CPU) → top 10. The candidates are dense's own, so only the order changes: the effect is the reranker's alone.
+- Variant: dense top 50 → a multilingual cross-encoder (`BAAI/bge-reranker-v2-m3`, also runs on CPU) → top 10. The candidates are dense's own, so only the order changes: the effect is the reranker's alone.
 - Added to E1's pool as a variant (`rag/pooled.py`): only the chunks nobody graded are graded, by the panel S settles on. Expected about 3–5 new chunks per question, about one call per question per judge.
-- Metrics and intervals as in E1, against dense, per question.
+- Metrics and intervals as in E1, against dense, per question. The pool grows, so E1's own numbers move a little; dense is re-scored on the same, larger pool.
+- **Free check, no extra calls:** the same comparison with haiku and DeepSeek alone, a 2 needing both (`--judges judge-haiku judge-deepseek`).
+- **When sol is added (fixed before the run):** only if the main result (new panel, median) is borderline: the reranker − dense interval on hit@5 or nDCG@10 touches 0, or the free check gives the other sign on either. Then sol grades E1b's new pairs (about $3–4) and the comparison is also reported under the old panel. Otherwise sol is not used.
+- Run: `uv run python -m rag.pooled --rerank --dry` builds the variant and counts the calls; `uv run python -m rag.pooled --rerank --judges judge-luna-or judge-haiku judge-deepseek` grades and reports to `summary-luna-or+haiku+deepseek.json` (the published `summary.json` stays).
 
 **Outcomes and what we do.**
 
@@ -226,17 +229,17 @@ From the swap on, luna is a judge and not a generator: it would grade its own an
 | Variant | Shows | Priority |
 |---|---|---|
 | No retrieval (the generator answers without sources) | a lower bound: what retrieval adds. Faithfulness does not apply; the rubric is graded against the baseline's chunks, so "correct" means the same in every variant | must |
-| Baseline: dense (E1, weakly) | | must |
-| Dense + reranker (E1b) | whether E1b's gain reaches the answers | unless E1b rules it out |
+| Baseline: dense (E1, weakly; confirmed by the team) | the reference row | must |
+| Dense + reranker (E1b) | whether E1b's gain (hit@5 +.106 over dense) reaches the answers | must |
 | Baseline, k = 10 | whether **more context** helps or lookalikes distract | should |
 | Hybrid | whether E1's near-tie carries over to the answers | drop first |
 | ~~Baseline + neighbours~~ dropped after E2 (+.06 on clauses, below the 10-point rule) | | |
 
 **Generator.** One open model from a family none of the judges is in, picked by E4's smoke test (about 8 dev questions per candidate, read, not scored). Not luna: it judges from the swap on.
 
-**Judge check.** If S swaps, sol scores 30 E3 answers spread over the variants (about $1–1.5); report luna against sol and the new panel against the old on grounded, correct and useful.
+**Judge check.** S swapped, so sol scores 30 E3 answers spread over the variants (about $1–1.5); report luna against sol and the new panel against the old on grounded, correct and useful.
 
-**Cost** (new panel, about 130 questions a variant): about $1.2 per variant; 4–5 variants about $6–7.5.
+**Cost** (new panel, about 130 questions a variant): about $1.5 per variant; 4–5 variants about $6–7.7 (`docs/model-prices.md`).
 
 **Metrics.**
 - RAGAS **faithfulness**: share of the answer's claims supported by the retrieved text.
@@ -272,14 +275,14 @@ All per category, compared per question.
 
 **Design.**
 - Context setup from E3; the ablation subset.
-- 3–4 generators chosen **on design grounds**, not by trying them on dev: a small open model (about 8B, Qwen or Gemma), a mid-size open model, a small GPT model. Possibly a Thai-tuned model next to its own base model (e.g. OpenThai 2.0 vs the Qwen it is built on) as a "does Thai tuning help" pair.
+- 3–4 generators chosen **on design grounds**, not by trying them on dev: a small open model (about 8B, Qwen or Gemma), a mid-size open model, possibly a small GPT model (but luna judges, see below). Possibly a Thai-tuned model next to its own base model (e.g. OpenThai 2.0 vs the Qwen it is built on) as a "does Thai tuning help" pair.
 - Before the run, a **smoke test** on about 8 dev questions per model: Thai output, `[n]` citations kept, asks back when it should, no truncation, rate limits. These answers are read, not scored.
 - Scored by the panel as in E3, including per-chunk relevance.
 
-**Metrics.** As in E3, per category; calculation and behavioural questions called out. **Each judge's score is reported next to the panel's**, so a judge favouring its own family (gpt-6-sol on the GPT generator) shows up instead of being assumed away.
+**Metrics.** As in E3, per category; calculation and behavioural questions called out. **Each judge's score is reported next to the panel's**, so a judge favouring its own family (luna on a GPT generator) shows up instead of being assumed away.
 
 **Assumptions.**
-- The panel's two non-OpenAI judges keep the GPT generator from being favoured by the median.
+- The panel's two non-OpenAI judges keep a GPT generator from being favoured by the median.
 - The ablation subset excludes dev, so the models were not chosen on the questions they are scored on.
 
 **Outcomes and what we do.**
@@ -287,7 +290,7 @@ All per category, compared per question.
 | Outcome | Then |
 |---|---|
 | Clear ranking of generators | Use the best affordable one for the demo; explain where the others fail (by category). |
-| The GPT generator wins only with gpt-6-sol, not the other judges | Treat it as possible self-preference; report the panel without sol as a check. |
+| A GPT generator wins only with luna, not the other judges | Treat it as possible self-preference; report the panel without luna as a check. |
 | Small models fail on behaviour (no ask-back, no premise correction) but not on facts | Report it as a finding: retrieval is shared, so the gap is the generator's instruction following. |
 | All generators fail on the same questions | Those are retrieval or corpus problems, not generation. Cross-check them with E1 grades for failure analysis. |
 
@@ -309,7 +312,8 @@ None of these block E1–E4. Each turns a judged number into a checked one.
 |---|---|---|
 | Generator for E3 | Decided: an open model from a family none of the judges is in, picked by the smoke test; not luna (a judge after S) | E3 |
 | Generator list for E4 | Optional now; if budget is left, one or two more generators on E3's baseline context | E4 |
-| Judge panel from E1b on | Decided: luna in sol's seat if S passes | E1b |
+| Judge panel from E1b on | Decided and done: luna in sol's seat (S passed) | done |
+| E3 baseline | Decided 2026-10-23: dense is the reference row and dense + reranker the variant compared with it (E1, E1b); hybrid stays as the variant dropped first | done |
 | E2 threshold | 10 points over the noise floor, as proposed; not met (+.06 on clauses) | done |
 | Neighbour definition | Used: the other parts of the same unit, then sibling units under the same parent (nearest first, next before previous), at most 512 extra tokens | done |
 | Corpus gaps (Q0111 general mutual-fund gains, Q0145 documents for a first online filing) | Report only (proposed: adding sources would move chunk ids) | before E1 |
@@ -367,6 +371,25 @@ Details: [`docs/experiments/2026-10-23-judge-swap/`](../experiments/2026-10-23-j
 - By the outcome table: swap. luna, haiku and DeepSeek grade E1b and E3; E1 is quoted under the new panel next to E1b.
 - Open: validated on chunk grades only; the sol check on 30 E3 answers is still planned.
 
+### E1b reranker (2026-10-23, done)
+
+Details: [`docs/experiments/2026-10-23-e1b-reranker/`](../experiments/2026-10-23-e1b-reranker/README.md).
+
+- Dense's top 50 reordered by bge-reranker-v2-m3; 1,213 new pairs graded by luna, haiku and DeepSeek (330 calls per judge).
+- Reranker − dense (new panel, median): hit@5 +.106 [+.062, +.153] (.687 → .794), nDCG@10 +.096 [+.078, +.115], recall@10 +.172. Strict and the free haiku + DeepSeek check agree in sign and size. Not borderline, so sol was not used.
+- The newly graded chunks are 2 less often than the reranker's chunks E1 had already graded (.242 vs .319 in its top 10), so the gain is not leniency on later batches; a direct control (about $0.3) was not run.
+- By the outcome table: into E3. The mechanism is the lookalike problem of E1: the cross-encoder reads question and chunk together and lifts the chunk that states the rule.
+- The pool grew, so dense's pool-relative numbers (nDCG, recall) are lower than in the swap check; hit@5, precision@5 and MRR are unchanged.
+
+### Why hybrid does not beat dense, and the E3 baseline (2026-10-23, confirmed)
+
+Details: [`docs/experiments/2026-10-23-hybrid-vs-dense-investigation/`](../experiments/2026-10-23-hybrid-vs-dense-investigation/README.md).
+
+- RRF ranks every chunk both lists found above every chunk only one found, so a dense answer BM25 misses is pushed out of hybrid's top 5. Changing the RRF constant moves which questions win, not how many.
+- BM25 misses because the questions are colloquial and the chunks formal; a word mapping, character n-grams and dropping the title from the indexed text do not close the gap.
+- Decision, confirmed by the team: dense is E3's baseline; dense + reranker (E1b) is the main variant compared with it; hybrid is the variant dropped first.
+
+
 ### E3 generator and baseline answers (2026-10-23)
 
 - Generator fixed: Typhoon (`typhoon-v2.5-30b-a3b-instruct`, profile `typhoon`), after the smoke test in `generation-and-eval.md`. A Qwen3-based model, from none of the judges' families.
@@ -379,4 +402,4 @@ Details: [`docs/experiments/2026-10-23-judge-swap/`](../experiments/2026-10-23-j
 - Baseline with retries: `rag/out/runs/20261023-ablation-typhoon-dense-k5-v1-sr3` (25 new calls). 120 answers on the first try, 11 retried; 5 still hold 申报 after 4 tries (Q0035, Q0129, Q0368, which leaked on every retry before, and Q0336, Q0337 of set D, whose conversation changed with the retried turn). Answers differ from the raw run only where retried or later in set D; sources are identical.
 - k = 10 with retries: `rag/out/runs/20261023-ablation-typhoon-dense-k10-v1-sr3` (22 new calls). 9 answers retried; 4 still hold 申报 (Q0007, Q0129, Q0224, Q0368). Same pattern: changes only where retried or later in set D; sources identical. A retried answer reads as the raw one without the leak (Q0293). Configs from these runs say `+dirty` because the worktree's untracked links into the main checkout (`rag/out/dense`, `rag/out/llm_cache`) count; the code was committed.
 - No retrieval with retries: `rag/out/runs/20261023-ablation-typhoon-none-n1-sr3` (84 new calls). 37 answers retried; 14 still hold 申报 after 4 tries (Q0072 Q0107 Q0129 Q0216 Q0224 Q0298 Q0336 Q0342 Q0351 Q0352 Q0361 Q0363 Q0364 Q0368), against 5 at k = 5 and 4 at k = 10. Without sources the leak is about three times as common, so when scored, check whether the no-retrieval gap holds without the answers whose `foreign_script` is not empty. No [n]; changes only where retried or later in a set.
-- Next: score the three `-sr3` runs with the new panel (luna, haiku, DeepSeek; see Judge swap), and the reranker variant after E1b. The raw runs (no `-sr3`) are not scored; they are the record of the leak and failure examples.
+- Next: score the three `-sr3` runs with the new panel (luna, haiku, DeepSeek; see Judge swap), and generate the dense + reranker variant (E1b passed, it goes into E3). The raw runs (no `-sr3`) are not scored; they are the record of the leak and failure examples.
