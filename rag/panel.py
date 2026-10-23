@@ -12,6 +12,9 @@ Aggregation, per answer:
 An answer is `contested` when two judges differ by two points on grounded, correct or useful; those are the ones a
 person should look at. Every judge's own rubric stays in the record under `judges`.
 
+Every judge must have scored the same answers. `--drop-unscored` instead combines only the answers all judges scored
+and lists the others under `dropped` in the config (E3: compare variants on the questions every judge scored).
+
 Run: uv run python -m rag.panel --judges judge judge-haiku judge-deepseek
 """
 
@@ -70,7 +73,7 @@ def load(path, judge: str) -> tuple[list[dict], dict]:
     return scores, json.loads((d / "scores_config.json").read_text(encoding="utf-8"))
 
 
-def combine(path, judges: list[str]) -> list[dict]:
+def combine(path, judges: list[str], drop_unscored: bool = False) -> list[dict]:
     if len(judges) < 3:
         raise SystemExit("a panel needs at least three judges, or the median is just one of them")
     loaded = {j: load(path, j) for j in judges}
@@ -80,8 +83,10 @@ def combine(path, judges: list[str]) -> list[dict]:
     by_judge = {j: {s["id"]: s for s in scores} for j, (scores, _) in loaded.items()}
     ids = [s["id"] for s in loaded[judges[0]][0]]
     missing = {j: sorted(set(ids) ^ set(by_id)) for j, by_id in by_judge.items() if set(ids) != set(by_id)}
-    if missing:
-        raise SystemExit(f"judges scored different answers: {missing}")
+    if missing and not drop_unscored:
+        raise SystemExit(f"judges scored different answers: {missing}; --drop-unscored combines only those all scored")
+    dropped = sorted({q for by_id in by_judge.values() for q in by_id} - set.intersection(*(set(b) for b in by_judge.values())))
+    ids = [q for q in ids if q not in dropped]
     scores = [aggregate({j: by_judge[j][q] for j in judges}) for q in ids]
 
     out = evaluate.out_dir(path, PANEL)
@@ -93,7 +98,7 @@ def combine(path, judges: list[str]) -> list[dict]:
         judges={j: dict(model=cfg["judge"]["model"], base_url=cfg["judge"]["base_url"], params=cfg["judge"]["params"],
                         scored=cfg["scored"]) for j, (_, cfg) in loaded.items()},
         aggregation="median of grounded/correct/useful/relevance, majority of behaviour and tags, mean of faithfulness",
-        n_scored=len(scores), n_contested=sum(s["contested"] for s in scores),
+        n_scored=len(scores), n_contested=sum(s["contested"] for s in scores), dropped=dropped,
     ), ensure_ascii=False, indent=1), encoding="utf-8")
     return scores
 
@@ -102,9 +107,10 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", help="run id under rag/out/runs (default: the newest)")
     ap.add_argument("--judges", nargs="+", default=DEFAULT_PANEL, help="judge profiles, each already scored with rag.evaluate")
+    ap.add_argument("--drop-unscored", action="store_true", help="combine only the answers every judge scored")
     a = ap.parse_args()
     path = evaluate.run_dir(a.run)
-    scores = combine(path, a.judges)
+    scores = combine(path, a.judges, a.drop_unscored)
     evaluate.print_summary(evaluate.summarise(scores))
     contested = [s for s in scores if s["contested"]]
     print(f"\n{len(contested)} of {len(scores)} answers contested (two judges two points apart):")
