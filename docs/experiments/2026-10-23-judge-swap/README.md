@@ -20,6 +20,7 @@ Status: done 2026-10-23. Plan: [`../../plans/ablation-plan-retrieval-context-gen
 | haiku vs DeepSeek | .763 | .006 |
 
 - luna agrees with sol more than any other two judges do, and is the strictest: share of 2s .154 (sol .210, haiku .175, DeepSeek .179).
+- How they differ (sol → luna, 7,018 pairs): 488 pairs 2 → 1 and 107 pairs 1 → 2; 0 ↔ 2 only 12. luna gives fewer 2s in every one of the 18 categories (−.02 to −.08), most in ภาษาพูด (−.08), รายได้ข้ามประเทศ and ฟรีแลนซ์ (−.07), least in ยื่นภาษีออนไลน์ (−.02). A shift in strictness, not a different reading of relevance.
 - E1 under the new panel: dense > hybrid > sparse on all five metrics, as before; all 15 differences inside the old intervals. Hybrid − dense: nDCG@10 −.038 (old −.031), recall@10 −.072 (old −.078).
 
 | a 2 is the median | hit@5 old → new | nDCG@10 old → new | recall@10 old → new |
