@@ -63,7 +63,7 @@ flowchart TD
 | E1 | Ranking ablation: dense vs sparse vs hybrid | no | no | **done 2026-10-23** (`rag/pooled.py`); summary in the Log, details in `docs/experiments/` |
 | E2 | Does adding neighbouring clauses make a chunk answer the question? | no | no | **done 2026-10-23** (`rag/neighbours.py`); summary in the Log, details in `docs/experiments/` |
 | S | Judge swap: can gpt-6-luna replace gpt-6-sol in the panel? | no | no | **done 2026-10-23** (`rag/judge_swap.py`): passes, luna takes sol's seat; summary in the Log |
-| E1b | Cross-encoder reranker, retrieval only | no | no | after S |
+| E1b | Cross-encoder reranker, retrieval only | no | no | **done 2026-10-23** (`rag/pooled.py --rerank`): reranker beats dense clearly, goes into E3; summary in the Log |
 | E3 | End-to-end: does retrieval, a reranker or more context give better answers? | yes, one generator | no | after E1b; generator picked by the smoke test |
 | E4 | Generator ablation | yes, 1–3 more generators | no | **optional**, if budget is left |
 | H | Confirm the panel's chunk grades; validate the judge on new answers | no | yes | when someone has time |
@@ -369,4 +369,14 @@ Details: [`docs/experiments/2026-10-23-judge-swap/`](../experiments/2026-10-23-j
 - Results pass: the new panel ranks dense > hybrid > sparse on all five metrics, and all 15 differences lie inside the old intervals. Absolute hit@5 drops .02–.04 (fewer 2s); nDCG and recall barely move.
 - By the outcome table: swap. luna, haiku and DeepSeek grade E1b and E3; E1 is quoted under the new panel next to E1b.
 - Open: validated on chunk grades only; the sol check on 30 E3 answers is still planned.
+
+### E1b reranker (2026-10-23, done)
+
+Details: [`docs/experiments/2026-10-23-e1b-reranker/`](../experiments/2026-10-23-e1b-reranker/README.md).
+
+- Dense's top 50 reordered by bge-reranker-v2-m3; 1,213 new pairs graded by luna, haiku and DeepSeek (330 calls per judge).
+- Reranker − dense (new panel, median): hit@5 +.106 [+.062, +.153] (.687 → .794), nDCG@10 +.096 [+.078, +.115], recall@10 +.172. Strict and the free haiku + DeepSeek check agree in sign and size. Not borderline, so sol was not used.
+- The newly graded chunks are 2 less often than the reranker's chunks E1 had already graded (.242 vs .319 in its top 10), so the gain is not leniency on later batches; a direct control (about $0.3) was not run.
+- By the outcome table: into E3. The mechanism is the lookalike problem of E1: the cross-encoder reads question and chunk together and lifts the chunk that states the rule.
+- The pool grew, so dense's pool-relative numbers (nDCG, recall) are lower than in the swap check; hit@5, precision@5 and MRR are unchanged.
 
