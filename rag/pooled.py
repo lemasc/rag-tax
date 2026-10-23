@@ -124,6 +124,23 @@ def panel_grades(per_judge: dict[str, list[dict]], items: list[dict], strict: bo
     return out
 
 
+def judge_grades(per_judge: dict[str, list[dict]], items: list[dict]) -> dict[str, dict[tuple[str, str], int]]:
+    """Each judge's own grades, {judge: {(question, chunk): grade}}, over the current pool only."""
+    keep = {(it["id"], e["chunk_id"], e["text_sha1"]) for it in items for e in it["pool"]}
+    return {j: {(r["id"], r["chunk_id"]): r["grade"] for r in rows if (r["id"], r["chunk_id"], r["text_sha1"]) in keep}
+            for j, rows in per_judge.items()}
+
+
+def contested(item: dict, by_judge: dict[str, dict[tuple[str, str], int]]) -> list[str]:
+    """The pool chunks two judges grade two points apart (a 0 and a 2): the ones a person should read."""
+    out = []
+    for e in item["pool"]:
+        g = [by_judge[j][item["id"], e["chunk_id"]] for j in by_judge]
+        if max(g) - min(g) == 2:
+            out.append(e["chunk_id"])
+    return out
+
+
 # ---------------------------------------------------------------- metrics
 
 
@@ -159,6 +176,27 @@ def paired_difference(a: dict[str, float | None], b: dict[str, float | None], se
     boot = d[np.random.default_rng(seed).integers(0, len(d), (BOOTSTRAP, len(d)))].mean(axis=1)
     lo, hi = np.percentile(boot, [2.5, 97.5])
     return dict(mean=float(d.mean()), lo=float(lo), hi=float(hi), n=len(d))
+
+
+def compare_modes(item: dict, grades: dict[str, dict[str, int]], a: str = "dense", b: str = "hybrid") -> str:
+    """Which of two modes has a 2 in its top 5 on this question: 'both', 'a only', 'b only', 'neither', or
+    'no 2 in pool' (nothing any mode found answers it: a corpus or wording problem, not ranking)."""
+    g = grades[item["id"]]
+    if not any(v == 2 for v in g.values()):
+        return "no 2 in pool"
+    ha, hb = (any(g[c] == 2 for c in item["rankings"][m][:5]) for m in (a, b))
+    return "both" if ha and hb else f"{a} only" if ha else f"{b} only" if hb else "neither"
+
+
+def hybrid_top5_sources(items: list[dict], grades: dict[str, dict[str, int]]) -> dict[str, list[int]]:
+    """The grades of the chunks in hybrid's top 5, by which rankings had the chunk in their own top TOP: 'both',
+    'dense only', 'sparse only', or 'neither' (the fusion lifted it from rank TOP+1 or below in one of them)."""
+    out: dict[str, list[int]] = {k: [] for k in ("both", "dense only", "sparse only", "neither")}
+    for it in items:
+        d, s = it["rankings"]["dense"], it["rankings"]["sparse"]
+        for c in it["rankings"]["hybrid"][:5]:
+            out["both" if c in d and c in s else "dense only" if c in d else "sparse only" if c in s else "neither"].append(grades[it["id"]][c])
+    return out
 
 
 def summarise(items: list[dict], per_judge: dict[str, list[dict]]) -> dict:

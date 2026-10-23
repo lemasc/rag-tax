@@ -46,3 +46,20 @@ def test_paired_difference_skips_questions_either_mode_has_no_value_for():
     d = paired_difference(a, b)
     assert d["n"] == 2 and d["mean"] == pytest.approx(0.5) and d["lo"] <= d["mean"] <= d["hi"]
     assert paired_difference({"q": None}, {"q": 1.0}) == dict(mean=None, lo=None, hi=None, n=0)
+
+
+def test_compare_modes_and_contested_and_sources():
+    from rag.pooled import compare_modes, contested, hybrid_top5_sources, judge_grades
+
+    item = dict(id="Q1", pool=[dict(chunk_id=c, text_sha1="1") for c in "abc"],
+                rankings=dict(dense=["a", "b"], sparse=["c", "b"], hybrid=["b", "c"]))
+    g = {"Q1": {"a": 2, "b": 1, "c": 0}}
+    assert compare_modes(item, g) == "dense only"  # the 2 is in dense's top 5; hybrid does not have it
+    g2 = {"Q1": {"a": 1, "b": 1, "c": 2}}
+    assert compare_modes(item, g2, "dense", "sparse") == "sparse only"
+    assert compare_modes(item, {"Q1": {"a": 0, "b": 1, "c": 1}}) == "no 2 in pool"
+    assert hybrid_top5_sources([item], g) == {"both": [1], "dense only": [], "sparse only": [0], "neither": []}
+    rows = {j: [dict(id="Q1", chunk_id="a", text_sha1="1", grade=x), dict(id="Q1", chunk_id="b", text_sha1="1", grade=1),
+                dict(id="Q1", chunk_id="c", text_sha1="1", grade=1), dict(id="Q1", chunk_id="a", text_sha1="old", grade=0)]
+            for j, x in (("x", 2), ("y", 0))}
+    assert contested(item, judge_grades(rows, [item])) == ["a"]
