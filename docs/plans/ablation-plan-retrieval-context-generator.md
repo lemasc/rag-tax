@@ -120,13 +120,18 @@ Each is reported twice: a "2" as the panel **median** (lenient) and as **all thr
 
 ## E2 Do neighbouring clauses help?
 
+**Pre-review (2026-10-23).** Before spending judge calls, 10 later-part chunks (3 clause, 4 statute, 3 annex, each a distinct chunk) were marked by hand on "would the missing text make this chunk answer the question": 1 yes, 3 unsure, 6 no. By type: clause 0 yes of 3; statute 1 yes, 1 unsure, 2 no of 4; annex 0 yes, 2 unsure, 1 no of 3. A first read of 7 random 1-graded chunks agreed: most 1s are on-topic misses (the chunk is about a different subtopic), not clauses missing a condition next door. So the expected effect is small, the clause stratum most of all, and the plan keeps the cost low and the strata separate.
+
 **Question.** Legal clauses are small. Is a clause often "on topic but not enough" because the condition, exception or definition it needs sits in the next clause?
 
 This is a **hypothesis**, not a finding. Part of the gap is already covered: a clause's header includes the opening words of its parent มาตรา or ข้อ. What the header does **not** carry is sibling items ("ทั้งนี้ …", exceptions, definitions in another ข้อ).
 
 **Design.**
 
-1. Take clause chunks in the **dense or hybrid** top 5 that the panel graded **1** in E1. Sparse is clearly worst in E1, so its top 5 adds many 1s nobody would serve and would dilute the conversion rate. Chunks found only by sparse are left out; as a check, also report the result per source mode (dense, hybrid, sparse-only).
+1. Take chunks in the **dense or hybrid** top 5 that the panel graded **1** in E1, in two strata reported separately:
+   - **Clause stratum:** `origin == "clause"` (218 chunk-question pairs, 115 questions).
+   - **Later-part stratum:** a later part (part > 1) of a split statute, annex or clause unit (about 59 pairs from 16 distinct chunks, plus the 14 later-part clause pairs, which stay in the clause stratum). The missing text here is the earlier part of the same unit, so the neighbour is clear. Windows, FAQ and guide chunks are not expanded: window neighbours are adjacent slices of an article (a context-size question that E3's k = 10 control covers), and a FAQ chunk carries its own question and answer.
+   - Three chunks account for 41 of the 73 later-part pairs, so also report the conversion **per distinct chunk**, not only per pair. Sparse is clearly worst in E1, so its top 5 adds many 1s nobody would serve and would dilute the conversion rate. Chunks found only by sparse are left out; as a check, also report the result per source mode (dense, hybrid, sparse-only).
    - Leave out the **boilerplate** chunks (a decree's last มาตรา on who is in charge of enforcement, signatures). Neighbours will not fix them. Count how many were dropped, next to the E1 count of boilerplate in the top 5.
 2. Grade each twice more, in the same blind setup as E1:
    - **expanded**: the chunk plus its neighbours (siblings in the same parent unit; capped, e.g. 512 extra tokens);
@@ -152,6 +157,7 @@ A few hundred calls in all.
 | About the floor | Neighbours do not help at this level; E3 runs without them. Report it as a tested and rejected idea: a measured negative result is good ablation material. |
 | Expansion often turns 2s into 1s | Expansion dilutes; if it is still tried in E3, add only the parent's opening words or a smaller cap. |
 | The gains come from a few document types | Expand only those (e.g. legal clauses), not FAQ items, which already contain their own question and answer. |
+| Gains only in the later-part stratum | Expand later parts of split units only (the earlier part of the same unit); do not expand whole clauses. |
 | Gains appear only on the no-"2" questions | Neighbours help where nothing else answered; keep them as an E3 variant but expect a small overall effect. |
 | Sol's route drift is as large as the expanded effect | The control cannot separate the two; re-run the E2 grades on one route before trusting the result. |
 
@@ -239,7 +245,7 @@ None of these block E1–E4. Each turns a judged number into a checked one.
 | Generator for E3 | The model the demo will use. An open model is cleaner for reporting; the GPT stand-in also works, since the generator is held fixed | E3 |
 | Generator list for E4 | Small open, mid open, small GPT, Thai-tuned pair | E4 |
 | E2 threshold | Proposed 10 points over the noise floor; agree before the run | E2 |
-| Neighbour definition | Same parent unit (proposed) or previous/next chunk; token cap | E2 |
+| Neighbour definition | Same parent unit (proposed) or previous/next chunk; token cap. For later parts: the earlier parts of the same unit first | E2 |
 | Corpus gaps (Q0111 general mutual-fund gains, Q0145 documents for a first online filing) | Report only (proposed: adding sources would move chunk ids) | before E1 |
 
 ## Known limits (state them in the report)
@@ -267,3 +273,4 @@ Details: [`docs/experiments/2026-10-23-e1-ranking-ablation/`](../experiments/202
 - Dense is at least as good as hybrid: hit@5 .717 vs .699 (inside the interval), nDCG@10 .695 vs .664 and recall@10 .686 vs .608 (outside). By the outcome table: "a single mode beats hybrid", weakly.
 - Caveats: gpt-6-sol was graded over two routes (OpenAI direct, then OpenRouter) that were not compared; 31 questions (56 strict) have no 2 in the pool.
 - Effect on E2 (plan updated after reading this): the sample comes from dense and hybrid top 5 only, boilerplate is excluded, the no-"2" questions are reported as their own group, and sol's route drift is measured next to the "alone again" control. E3's baseline row is now dense.
+- Pre-review of the E2 sample (hand-marked, 10 chunks): 1 yes, 3 unsure, 6 no, so E2 stays clause-led and adds a separate later-part stratum (statute, annex) because that is where the yes and unsure marks were. The 73 later-part pairs come from only 16 distinct chunks, so E2 is also reported per chunk. One marked chunk was a keyword match on ค่าตอบแทน in an insurance-agent clause: leniency from matching terms, for failure analysis.
