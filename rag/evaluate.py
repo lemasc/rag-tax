@@ -106,7 +106,8 @@ KIND_NOTE = {
 
 def make_ask(judge: llm.Profile) -> Ask:
     """ask(messages, check) -> (checked reply, replies). A reply that is not JSON, or that `check` rejects, is asked
-    again once without the cache (which also replaces the bad cached text)."""
+    again once without the cache (which also replaces the bad cached text). A reply cut off at the token cap is not
+    asked again here: llm.chat already did, with a larger cap, so the same request would fail the same way."""
 
     def ask(messages, check):
         err = None
@@ -114,6 +115,8 @@ def make_ask(judge: llm.Profile) -> Ask:
             try:
                 data, r = llm.chat_json(judge, messages, use_cache=attempt == 0)
                 return check(data), [r]
+            except llm.Truncated as e:
+                raise ValueError(f"judge reply cut off: {e}") from e
             except (ValueError, KeyError, TypeError) as e:
                 err = e
         raise ValueError(f"judge reply unusable twice: {err}")
@@ -308,8 +311,17 @@ def evaluate(path: Path, judge_name: str = JUDGE_PROFILE, limit: int | None = No
     chunks = {c["chunk_id"]: c for c in read_jsonl(OUT / "chunks.jsonl")}
     todo = [r for r in records if r["in_subset"]][:limit]
 
+    def score(r: dict) -> dict | None:
+        try:
+            return score_record(ask, embedder, r, chunks, by_id)
+        except ValueError as e:  # an unusable judge reply: keep the other answers, list this one in the config
+            print(f"{judge_name}: {r['id']} not scored: {e}")
+            return None
+
     with ThreadPoolExecutor(WORKERS) as pool:
-        scores = list(pool.map(lambda r: score_record(ask, embedder, r, chunks, by_id), todo))
+        got = list(pool.map(score, todo))
+    scores = [s for s in got if s]
+    not_scored = [r["id"] for r, s in zip(todo, got) if not s]
 
     out = out_dir(path, judge_name)
     out.mkdir(parents=True, exist_ok=True)
@@ -320,7 +332,7 @@ def evaluate(path: Path, judge_name: str = JUDGE_PROFILE, limit: int | None = No
     (out / "scores_config.json").write_text(json.dumps(dict(
         run_id=path.name, scored=time.strftime("%Y-%m-%dT%H:%M:%S%z"), judge_version=JUDGE_VERSION,
         judge=dict(profile=judge.name, backend=judge.backend, model=judge.model, base_url=judge.base_url, params=judge.params),
-        embed_model=embedder.model_name, relevance_n=RELEVANCE_N, current_tax_year=CURRENT_TAX_YEAR, n_scored=len(scores),
+        embed_model=embedder.model_name, relevance_n=RELEVANCE_N, current_tax_year=CURRENT_TAX_YEAR, n_scored=len(scores), not_scored=not_scored,
         new_prompt_tokens=sum(s["judge_tokens"]["prompt"] for s in scores),
         new_completion_tokens=sum(s["judge_tokens"]["completion"] for s in scores),
     ), ensure_ascii=False, indent=1), encoding="utf-8")

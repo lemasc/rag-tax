@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+from rag import llm
 from rag.evaluate import (agree, check_rubric, check_verdicts, conversation, faithfulness, human_gap, make_ask, relevance, rubric,
                           summarise)
 
@@ -86,6 +87,19 @@ def test_ask_retries_once_without_the_cache(monkeypatch):
 
     checked, _ = make_ask(None)([], check)
     assert checked == ["x"] and calls == [True, False]
+
+
+def test_ask_does_not_retry_a_reply_cut_off_at_the_cap(monkeypatch):
+    calls = []
+
+    def fake(judge, messages, use_cache=True, **kw):
+        calls.append(use_cache)
+        raise llm.Truncated("cut off at 200 tokens")
+
+    monkeypatch.setattr("rag.evaluate.llm.chat_json", fake)
+    with pytest.raises(ValueError, match="cut off"):
+        make_ask(None)([], lambda d: d)
+    assert calls == [True]
 
 
 def test_conversation_gives_earlier_turns_of_the_set_only():
