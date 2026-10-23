@@ -6,7 +6,7 @@ Status: draft 2026-10-19, order revised 2026-10-22; chunks frozen 2026-10-22 (ne
 
 - **Questions:** `rag/eval/tax-questions-pass-1.csv`, 369 questions, 20 categories, difficulty easy/medium/hard. No reference answers, no gold sources. No question names a tax year; 23 carry an amount.
   - Multi-turn: 12 questions in sets tagged `[รอบ n: ชุด X]`.
-  - Behavioural, where retrieval is not the point: `โจทย์ข้อมูลไม่ครบ` (15, should ask back), `ความเข้าใจผิด` (15, should correct the premise), `นอกขอบเขต` (1, Q0369, also missing its difficulty).
+  - Behavioural, where retrieval is not the point: `โจทย์ข้อมูลไม่ครบ` (15, should ask back), `ความเข้าใจผิด` (15, should correct the premise), `นอกขอบเขต` (1, Q0369, also missing its difficulty). Q0369 (lottery) is treated as a normal question since 2026-10-23 (`KIND_OVERRIDES` in `rag/questions.py`): มาตรา 42(11) and the ภ.ง.ด.94 FAQ (`61549#018`) answer it, so no question is out of scope any more.
   - Thin corpus coverage: crypto (4 chunks), freelance (1), online selling and part-time (0).
 - **Assignment:** at least 2 metrics from BERTScore, BLEU/ROUGE, LLM-as-Judge, RAGAS Faithfulness, RAGAS Answer Relevance; at least 2 system variants compared. Without reference answers, BERTScore and BLEU/ROUGE are out, so every answer metric needs an LLM judge.
 - **Models:** an OpenAI key now; OpenRouter (or similar) later for variety. No local LLM for now (the Ollama install is broken); `OLLAMA_BASE_URL` stays as an option. All of them speak the OpenAI chat API. Embeddings stay local (bge-m3), so retrieval needs no API.
@@ -130,7 +130,7 @@ Next (revised 2026-10-22, after the top-50 diagnostic). No tuning on the 13 miss
 `rag/out/runs/20261020-dev-gpt-mini-hybrid-k5-v1`: gpt-6-luna (reasoning low), hybrid, k = 5, prompt v1. 40 calls, 103K tokens in, 7K out, median 9.6 s per answer. Built with `answer.py` and `demo.py` (step 3); not yet read in full by a person.
 
 - Every answer cites at least one source; no citation points outside the 5 sources.
-- Behavioural questions behave: the ask-back questions ask for the missing facts, both misconceptions are corrected, the lottery question says the sources do not cover it.
+- Behavioural questions behave: the ask-back questions ask for the missing facts, both misconceptions are corrected, the lottery question says the sources do not cover it (counted as correct then; Q0369 is now a normal question, so this was a retrieval miss).
 - **One document fills all 5 slots.** Q0091 and Q0301 (foreign income) get five windows of ป.120/2545 (film crews); Q0327 gets five windows of ป.96/2543. ป.161/2566 and ป.162/2566 (foreign income, มาตรา 41 วรรคสอง), which answer Q0091, are in the corpus and not retrieved. A per-document cap on hits is a candidate fix and ablation.
 - **Calculation questions get old worked examples** (2542–2543 withholding orders) instead of the current rate table, and the answer declines to compute. Tax-year handling again.
 - The demo question on parents' allowance mixed the half-year ภ.ง.ด.94 amount (15,000) into the answer as if it were an older year's figure.
@@ -180,7 +180,7 @@ The dev run showed one document filling all five slots (Q0091, Q0301, Q0327; see
 
 Question: for the dev questions tagged `retrieval_miss`, is a chunk that answers them in the candidates, and if so where? `rag/depth.py`; the class definitions are in its docstring.
 
-- **Questions:** the 13 content questions tagged `retrieval_miss` by a person or the panel on either dev run (Q0369, out of scope, is left out), and 10 control questions the panel scored 2/2/2 with no tag (a seeded sample).
+- **Questions:** the 13 content questions tagged `retrieval_miss` by a person or the panel on either dev run (Q0369, then out of scope, is left out), and 10 control questions the panel scored 2/2/2 with no tag (a seeded sample).
 - **Pool:** every chunk the dense top 50 or the sparse top 50 found (the whole fused list, up to 100). Graded 0/1/2 by the three-judge panel in shuffled batches of 10, on the rubric's chunk-relevance scale.
 - **Classes** by the hybrid rank of the best chunk graded 2: A 1-5, B 6-50, C 51+, D none.
 - **Decided before the run:** if B and C together hold most of the miss questions, the next work is ranking (tax-year boost, reranker); if D holds most, it is the corpus and query wording; otherwise the report says mixed and the two are tried cheaply. 13 questions cannot tell a 7/6 split from a 6/7 one, so "most" means at least 9. Reported twice, a 2 meaning the panel median (lenient) and all three judges (strict); a conclusion that changes between the two is reported as unsure.
