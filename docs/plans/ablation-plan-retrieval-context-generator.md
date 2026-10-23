@@ -56,7 +56,7 @@ flowchart TD
 | # | Experiment | Needs generation | Needs a person | Status |
 |---|---|---|---|---|
 | E1 | Ranking ablation: dense vs sparse vs hybrid | no | no | **done 2026-10-23** (`rag/pooled.py`); summary in the Log, details in `docs/experiments/` |
-| E2 | Does adding neighbouring clauses make a chunk answer the question? | no | no | to build, after E1 |
+| E2 | Does adding neighbouring clauses make a chunk answer the question? | no | no | **done 2026-10-23** (`rag/neighbours.py`); summary in the Log, details in `docs/experiments/` |
 | E3 | End-to-end: does better retrieval or context give better answers? | yes, one generator | no | needs the generator chosen |
 | E4 | Generator ablation | yes, 3–4 generators | no | needs the generator list |
 | H | Confirm the panel's chunk grades; validate the judge on new answers | no | yes | when someone has time |
@@ -136,7 +136,7 @@ This is a **hypothesis**, not a finding. Part of the gap is already covered: a c
 2. Grade each twice more, in the same blind setup as E1:
    - **expanded**: the chunk plus its neighbours (siblings in the same parent unit; capped, e.g. 512 extra tokens);
    - **alone again**: the same chunk as in E1, as a control. A 1 can become a 2 just by asking again, and this measures how often.
-   - Run the control on **one route per judge**. In E1, gpt-6-sol was graded over two routes (OpenAI direct, then OpenRouter) that were never compared, so part of the control's change could be route drift, not re-asking noise. Log sol's route drift as its own number: re-grade a small sample of E1 pairs on the other route.
+   - Run both conditions on **one route per judge**. In E1, gpt-6-sol was graded over two routes (OpenAI direct, then OpenRouter) that were never compared. Run: all judges on OpenRouter, so the route effect cancels in expanded minus alone and no separate drift check was needed.
 3. Also expand a sample of chunks graded **2**, to see whether neighbours dilute them.
 4. Mark the questions with **no "2" in the E1 pool** (31 by the median, 56 by the strict rule). They are reported as their own group (see Metric).
 
@@ -159,7 +159,6 @@ A few hundred calls in all.
 | The gains come from a few document types | Expand only those (e.g. legal clauses), not FAQ items, which already contain their own question and answer. |
 | Gains only in the later-part stratum | Expand later parts of split units only (the earlier part of the same unit); do not expand whole clauses. |
 | Gains appear only on the no-"2" questions | Neighbours help where nothing else answered; keep them as an E3 variant but expect a small overall effect. |
-| Sol's route drift is as large as the expanded effect | The control cannot separate the two; re-run the E2 grades on one route before trusting the result. |
 
 ---
 
@@ -173,7 +172,7 @@ A few hundred calls in all.
 |---|---|
 | Baseline: best mode from E1 (dense, weakly) | |
 | The other main mode (hybrid) | whether E1's ranking gap carries over to the answers |
-| Baseline + neighbours (only if E2 supports it; applied to the baseline mode) | whether expansion helps |
+| ~~Baseline + neighbours~~ dropped after E2 (+.06 on clauses, below the 10-point rule) | |
 | Baseline, k = 10 | a **context-size control**: neighbours add tokens, and more context alone might explain a gain |
 
 **Metrics.**
@@ -244,8 +243,8 @@ None of these block E1–E4. Each turns a judged number into a checked one.
 |---|---|---|
 | Generator for E3 | The model the demo will use. An open model is cleaner for reporting; the GPT stand-in also works, since the generator is held fixed | E3 |
 | Generator list for E4 | Small open, mid open, small GPT, Thai-tuned pair | E4 |
-| E2 threshold | Proposed 10 points over the noise floor; agree before the run | E2 |
-| Neighbour definition | Same parent unit (proposed) or previous/next chunk; token cap. For later parts: the earlier parts of the same unit first | E2 |
+| E2 threshold | 10 points over the noise floor, as proposed; not met (+.06 on clauses) | done |
+| Neighbour definition | Used: the other parts of the same unit, then sibling units under the same parent (nearest first, next before previous), at most 512 extra tokens | done |
 | Corpus gaps (Q0111 general mutual-fund gains, Q0145 documents for a first online filing) | Report only (proposed: adding sources would move chunk ids) | before E1 |
 
 ## Known limits (state them in the report)
@@ -274,3 +273,13 @@ Details: [`docs/experiments/2026-10-23-e1-ranking-ablation/`](../experiments/202
 - Caveats: gpt-6-sol was graded over two routes (OpenAI direct, then OpenRouter) that were not compared; 31 questions (56 strict) have no 2 in the pool.
 - Effect on E2 (plan updated after reading this): the sample comes from dense and hybrid top 5 only, boilerplate is excluded, the no-"2" questions are reported as their own group, and sol's route drift is measured next to the "alone again" control. E3's baseline row is now dense.
 - Pre-review of the E2 sample (hand-marked, 10 chunks): 1 yes, 3 unsure, 6 no, so E2 stays clause-led and adds a separate later-part stratum (statute, annex) because that is where the yes and unsure marks were. The 73 later-part pairs come from only 16 distinct chunks, so E2 is also reported per chunk. One marked chunk was a keyword match on ค่าตอบแทน in an insurance-agent clause: leniency from matching terms, for failure analysis.
+
+### E2 neighbouring text (2026-10-23, done)
+
+Details: [`docs/experiments/2026-10-23-e2-neighbours/`](../experiments/2026-10-23-e2-neighbours/README.md).
+
+- 277 chunks graded 1 in E1 (218 clause, 59 later-part from 12 distinct chunks), each graded alone and with neighbours by the three judges on OpenRouter; 54 chunks graded 2 as a dilution check.
+- Share of the 1s that become 2, expanded minus alone: +.05 [+.01, +.09] overall, **+.06 [+.02, +.10] on clauses**, .00 [−.11, +.12] on later parts, +.03 [−.09, +.11] on the no-"2" questions. Strict gives the same size. Sol, haiku and DeepSeek each give +.03 to +.05. The noise floor is about 10%.
+- Only 17 of 123 distinct chunks gain; neighbours do not dilute good chunks (dilution .00).
+- By the outcome table: below the 10-point rule, a small real effect on clauses. The 1s are mostly on-topic misses, not clauses missing a condition next door. Neighbours are out of E3; the k = 10 control stays.
+- Open: E2 measures the panel's chunk grades, not answers; the later-part result rests on 12 chunks. Sol stopped once on OpenRouter's credit limit (217 of 314 calls were cached and reused).
