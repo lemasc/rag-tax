@@ -68,3 +68,11 @@ rpm = 18  # a profile's rpm overrides its backend's; OpenRouter limits new accou
 backend = "openrouter"
 model = "deepseek/deepseek-v4.1-flash"
 params = { temperature = 0 }
+
+# gpt-6-sol again, through OpenRouter (2026-10-23): finishes the pooled-ranking grades (rag.pooled) after the OpenAI credit
+# ran out. Same model and reasoning effort as `judge`, but another route: the pairs it grades are marked in the notes of E1.
+[models.judge-sol-or]
+backend = "openrouter"
+model = "openai/gpt-6-sol"
+params = { reasoning_effort = "medium", max_tokens = 6000 }  # a small cap: the key's spend limit is checked against the largest possible reply
+rpm = 18  # OpenRouter limits new accounts to 20 requests per minute on this model

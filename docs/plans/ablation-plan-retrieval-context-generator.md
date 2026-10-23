@@ -7,7 +7,7 @@ Status: draft 2026-10-23. Tracks what we run next, and why, now that the corpus 
 | Done | Not done |
 |---|---|
 | Corpus settled; **2,070 chunks frozen** from 173 documents (a test fails if they change) | Any run on the frozen chunks. Both earlier dev runs, their human labels and the top-50 diagnostic were made on the **old** chunks, so they are background, not results |
-| Retrieval: dense (bge-m3), sparse (BM25), hybrid (RRF) | Retrieval metrics |
+| Retrieval: dense (bge-m3), sparse (BM25), hybrid (RRF) | Retrieval metrics beyond E1 (E1 is done, see the Log); E2 onward |
 | Generation (`rag/answer.py`) and a demo (`demo.py`) | A generator we can report: the only one so far is a GPT dev stand-in, from the same family as one judge |
 | Answer scoring: RAGAS faithfulness, RAGAS answer relevance, rubric judge; a three-judge panel checked against human labels | Ablations, failure analysis, slides, the AI audit in the course template |
 
@@ -55,7 +55,7 @@ flowchart TD
 
 | # | Experiment | Needs generation | Needs a person | Status |
 |---|---|---|---|---|
-| E1 | Ranking ablation: dense vs sparse vs hybrid | no | no | to build (`rag/pooled.py`) |
+| E1 | Ranking ablation: dense vs sparse vs hybrid | no | no | **done 2026-10-23** (`rag/pooled.py`); summary in the Log, details in `docs/experiments/` |
 | E2 | Does adding neighbouring clauses make a chunk answer the question? | no | no | to build, after E1 |
 | E3 | End-to-end: does better retrieval or context give better answers? | yes, one generator | no | needs the generator chosen |
 | E4 | Generator ablation | yes, 3–4 generators | no | needs the generator list |
@@ -246,6 +246,18 @@ None of these block E1–E4. Each turns a judged number into a checked one.
 
 ## Log
 
-| Date | What happened |
-|---|---|
-| 2026-10-23 | Plan written. E1 chosen as a retrieval-only ablation (pooled grading, about 10× cheaper than generating and scoring answers for each mode); E3 added as the bridge to answer quality; E2 added to test the small-clause assumption before spending on generation. |
+Newest entry last. Each entry: what was done, the numbers, the likely cause, what is still open. All dates 2026-10-23.
+
+### Plan written
+
+- E1 is retrieval-only: pooled grading costs about 10× less than generating and scoring answers for each mode.
+- E3 is added as the bridge from retrieval to answer quality.
+- E2 is added to test the small-clause assumption before spending on generation.
+
+### E1 ranking ablation (2026-10-23, done)
+
+Details: [`docs/experiments/2026-10-23-e1-ranking-ablation/`](../experiments/2026-10-23-e1-ranking-ablation/README.md).
+
+- Sparse is clearly worst: hybrid beats it by about 0.2 on every metric.
+- Dense is at least as good as hybrid: hit@5 .717 vs .699 (inside the interval), nDCG@10 .695 vs .664 and recall@10 .686 vs .608 (outside). By the outcome table: "a single mode beats hybrid", weakly.
+- Caveats: gpt-6-sol was graded over two routes (OpenAI direct, then OpenRouter) that were not compared; 31 questions (56 strict) have no 2 in the pool.
