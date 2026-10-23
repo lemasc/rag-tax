@@ -126,15 +126,18 @@ This is a **hypothesis**, not a finding. Part of the gap is already covered: a c
 
 **Design.**
 
-1. Take clause chunks in any mode's top 5 that the panel graded **1** in E1.
+1. Take clause chunks in the **dense or hybrid** top 5 that the panel graded **1** in E1. Sparse is clearly worst in E1, so its top 5 adds many 1s nobody would serve and would dilute the conversion rate. Chunks found only by sparse are left out; as a check, also report the result per source mode (dense, hybrid, sparse-only).
+   - Leave out the **boilerplate** chunks (a decree's last มาตรา on who is in charge of enforcement, signatures). Neighbours will not fix them. Count how many were dropped, next to the E1 count of boilerplate in the top 5.
 2. Grade each twice more, in the same blind setup as E1:
    - **expanded**: the chunk plus its neighbours (siblings in the same parent unit; capped, e.g. 512 extra tokens);
    - **alone again**: the same chunk as in E1, as a control. A 1 can become a 2 just by asking again, and this measures how often.
+   - Run the control on **one route per judge**. In E1, gpt-6-sol was graded over two routes (OpenAI direct, then OpenRouter) that were never compared, so part of the control's change could be route drift, not re-asking noise. Log sol's route drift as its own number: re-grade a small sample of E1 pairs on the other route.
 3. Also expand a sample of chunks graded **2**, to see whether neighbours dilute them.
+4. Mark the questions with **no "2" in the E1 pool** (31 by the median, 56 by the strict rule). They are reported as their own group (see Metric).
 
 A few hundred calls in all.
 
-**Metric.** The share of 1s that become 2 when expanded, minus the share that become 2 when asked again alone (the noise floor).
+**Metric.** The share of 1s that become 2 when expanded, minus the share that become 2 when asked again alone (the noise floor). Report it overall, per source mode, and for the **no-"2" questions** on their own. A conversion there is the strongest evidence for the hypothesis, because it recovers questions that no ranking change can fix. If none convert, those questions are corpus or wording gaps and go to failure analysis.
 
 **Assumptions.**
 
@@ -149,6 +152,8 @@ A few hundred calls in all.
 | About the floor | Neighbours do not help at this level; E3 runs without them. Report it as a tested and rejected idea: a measured negative result is good ablation material. |
 | Expansion often turns 2s into 1s | Expansion dilutes; if it is still tried in E3, add only the parent's opening words or a smaller cap. |
 | The gains come from a few document types | Expand only those (e.g. legal clauses), not FAQ items, which already contain their own question and answer. |
+| Gains appear only on the no-"2" questions | Neighbours help where nothing else answered; keep them as an E3 variant but expect a small overall effect. |
+| Sol's route drift is as large as the expanded effect | The control cannot separate the two; re-run the E2 grades on one route before trusting the result. |
 
 ---
 
@@ -160,9 +165,9 @@ A few hundred calls in all.
 
 | Variant | Shows |
 |---|---|
-| Baseline: best mode from E1 | |
-| The other main mode (e.g. dense if hybrid won) | whether E1's ranking gap carries over to the answers |
-| Baseline + neighbours (only if E2 supports it) | whether expansion helps |
+| Baseline: best mode from E1 (dense, weakly) | |
+| The other main mode (hybrid) | whether E1's ranking gap carries over to the answers |
+| Baseline + neighbours (only if E2 supports it; applied to the baseline mode) | whether expansion helps |
 | Baseline, k = 10 | a **context-size control**: neighbours add tokens, and more context alone might explain a gain |
 
 **Metrics.**
@@ -261,3 +266,4 @@ Details: [`docs/experiments/2026-10-23-e1-ranking-ablation/`](../experiments/202
 - Sparse is clearly worst: hybrid beats it by about 0.2 on every metric.
 - Dense is at least as good as hybrid: hit@5 .717 vs .699 (inside the interval), nDCG@10 .695 vs .664 and recall@10 .686 vs .608 (outside). By the outcome table: "a single mode beats hybrid", weakly.
 - Caveats: gpt-6-sol was graded over two routes (OpenAI direct, then OpenRouter) that were not compared; 31 questions (56 strict) have no 2 in the pool.
+- Effect on E2 (plan updated after reading this): the sample comes from dense and hybrid top 5 only, boilerplate is excluded, the no-"2" questions are reported as their own group, and sol's route drift is measured next to the "alone again" control. E3's baseline row is now dense.
