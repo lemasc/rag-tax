@@ -1,0 +1,19 @@
+stem,page,text,decision,bold_frac,note
+Ins90_241268,5,2.6 การบริจาคให้แก่สภากาชาดไทยและมูลนิธิ ดังต่อไปนี้,demote,0.07,numbered sub-item set in plain type per the PDF font
+Ins90_241268,5,3.3 เงินที่จ่ายให้กองทุนพัฒนาครู คณาจารย์ และบุคลากร ทางการศ,demote,0.04,numbered sub-item set in plain type per the PDF font
+Ins90_241268,12,11.12 กรณีมีการแปลงหนี้ใหม่ด้วยการเปลี่ยนตัวเจ้าหนี้เงินกู้ย,demote,0.00,numbered sub-item set in plain type per the PDF font
+Ins90_241268,15,20.2.3 กรณีคู่สมรสต่างฝ่ายต่างมีเงินได้,demote,0.00,numbered sub-item set in plain type (Ins90 p15 seen on the page)
+Ins90_241268,15,20.3.1 ใบกำกับภาษีตามมาตรา 86/4 แห่งประมวล รัษฎากร ที่ระบุค่,demote,0.00,numbered sub-item set in plain type (Ins90 p15 seen on the page)
+Ins90_241268,15,20.3.2 สัญญาจ้างก่อสร้างอาคารเพื่ออยู่อาศัย,demote,0.00,numbered sub-item set in plain type (Ins90 p15 seen on the page)
+Ins90_241268,15,20.3.3 ใบอนุญาตก่อสร้างอาคาร หรือใบรับแจ้งการ ก่อสร้างอาคาร ,demote,0.00,numbered sub-item set in plain type (Ins90 p15 seen on the page)
+Ins90_241268,16,22. ค่าท่องเที่ยวภายในประเทศ (ตั้งแต่วันที่ 29 ต.ค 2568 - 15,keep,0.42,"section opener, bold lead then plain text"
+Ins91_241268,9,ผู้มีเงินได้ต้องมีหนังสือรับรองตามแบบที่อธิบดีกำหนด,keep,0.72,mostly bold (0.72)
+Ins91_241268,11,17.4 ค่าซื้อสินค้าหรือค่าบริการตาม 17.1 ไม่รวมถึงค่าซื้อ สิน,demote,0.00,numbered sub-item set in plain type per the PDF font
+Ins94_050668,3,4. เงินได้จากการให้หรือการรับ (โดยเลือกนำมารวมคำนวณภาษีกับเง,demote,0.20,"list item under 40(8), not a section (seen on the page)"
+Ins94_050668,3,5. เงินได้จากการให้หรือการรับ (โดยเลือกเสียภาษีในอัตราร้อยละ,demote,0.20,"list item under 40(8), not a section (seen on the page)"
+Ins94_050668,9,10. ดอกเบี้ยเงินกู้ยืมจากการกู้ยืมเงินเพื่อซื้อ เช่าซื้อ หรื,keep,0.16,"section opener, bold lead then plain text (seen on the page)"
+Ins94_050668,9,10.1 เป็นดอกเบี้ยเงินกู้ยืมสำหรับการกู้ยืมจาก,demote,0.38,"run-in numbered paragraph, bold lead only (seen on the page)"
+Ins94_050668,9,10.2 เป็นดอกเบี้ยเงินกู้ยืมตามสัญญากู้ยืมเงินเพื่อซื้อ เช่าซ,demote,0.56,"run-in numbered paragraph, bold lead only (seen on the page)"
+Ins94_050668,9,10.3 ต้องจำนองอาคารหรือห้องชุดในอาคารชุดหรืออาคาร พร้อมที่ดิ,demote,0.35,"run-in numbered paragraph, bold lead only (seen on the page)"
+Ins94_050668,9,10.4 ต้องใช้อาคารหรือห้องชุดในอาคารชุดตาม 10.3 เป็น ที่อยู่อ,demote,0.10,"run-in numbered paragraph, bold lead only (seen on the page)"
+Ins94_050668,9,10.5 กรณีผู้มีเงินได้มีอาคารหรือห้องชุดในอาคารชุดตาม,demote,0.00,"run-in numbered paragraph, bold lead only (seen on the page)"

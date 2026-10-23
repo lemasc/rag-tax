@@ -8,7 +8,7 @@ Input : data/pages.jsonl, data/raw/<page id>.html (the `col-main` block), data/c
 Output: data/image_index.csv       (image_id, page_id, url, file, width, height, alt, bytes), rewritten on every run
         data/raw/img/<file>        the downloaded images (not in git)
         data/raw/ocr/<image_id>/   Typhoon OCR output, same cache as the PDFs
-        data/image_decisions.csv   (image_id, decision keep|drop, title, note, decided_at, source ocr|manual, verified), by hand or notebook
+        data/image_decisions.csv   (image_id, decision keep|drop, title, note, decided_at, source ocr|manual, verified, tax_year), by hand or notebook
         data/text/image/<id>.md    text of every image decided `keep` (in git, so clean.build needs no OCR cache): the OCR text,
                                    or for `source = manual` a hand-corrected file that export never overwrites
 
@@ -41,7 +41,7 @@ TEXT = DATA / "text" / "image"
 INDEX = DATA / "image_index.csv"
 DECISIONS = DATA / "image_decisions.csv"
 INDEX_FIELDS = ["image_id", "page_id", "url", "file", "width", "height", "alt", "bytes"]
-DECISION_FIELDS = ["image_id", "decision", "title", "note", "decided_at", "source", "verified"]
+DECISION_FIELDS = ["image_id", "decision", "title", "note", "decided_at", "source", "verified", "tax_year"]
 SKIP = ("counter.php", "hits.php")  # visit counters, not content
 MIN_BYTES = 1000
 
@@ -98,13 +98,13 @@ def save_index(rows: list[dict]) -> None:
 def load_decisions() -> dict[str, dict]:
     if not DECISIONS.exists():
         return {}
-    return {r["image_id"]: {"source": "ocr", "verified": "", **r} for r in csv.DictReader(DECISIONS.open(encoding="utf-8"))}
+    return {r["image_id"]: {"source": "ocr", "verified": "", "tax_year": "", **r} for r in csv.DictReader(DECISIONS.open(encoding="utf-8"))}
 
 
 def save_decisions(decisions: dict[str, dict]) -> None:
     """Rewrite the decisions file. Written to a temporary file first, so a failure leaves the old file as it was
     (a long-running notebook can hold an older version of this module, and a half-written file lost two rows once)."""
-    rows = sorted(({"source": "ocr", "verified": "", **r} for r in decisions.values()), key=lambda r: r["image_id"])
+    rows = sorted(({"source": "ocr", "verified": "", "tax_year": "", **r} for r in decisions.values()), key=lambda r: r["image_id"])
     tmp = DECISIONS.with_suffix(".csv.tmp")
     try:
         with tmp.open("w", newline="", encoding="utf-8") as f:

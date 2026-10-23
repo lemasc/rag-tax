@@ -1,0 +1,22 @@
+{
+  "frozen_at": "2026-10-22",
+  "corpus_commit": "d821564",
+  "chunks": 2069,
+  "sha256": "1a15b8c2ed669b68adcb37dc4e8288d7f6bf121e96220e7037e6059cf01c40ee",
+  "tokenizer": "BAAI/bge-m3",
+  "max_tokens": 512,
+  "window_tokens": 384,
+  "note": "Chunk ids are frozen: qrels key on them. Regenerating chunks.jsonl changes this hash and fails rag/tests/test_chunk.py; update this file only on purpose, with the qrels re-mapped.",
+  "earlier": [
+    {
+      "chunks_sha": "95bba22006ba",
+      "commit": "482191b",
+      "note": "2026-10-19 baseline with the PIT scope filter; runs 20261020-dev-gpt-mini-hybrid-k5-v1, 20261022-dev-gpt-mini-hybrid-k5-cap2-v1 and the top-50 pool (rag/out/depth)"
+    },
+    {
+      "chunks_sha": "889c2cc8ce2c",
+      "commit": "8bfd02f",
+      "note": "2026-10-19 first baseline, before the scope filter"
+    }
+  ]
+}

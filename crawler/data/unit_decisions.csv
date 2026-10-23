@@ -1,22 +1,85 @@
-id,level,decision,duplicate_of,match,note,decided_at
-61065,doc,drop,61081,identical,all 74 units identical after whitespace and U+FFFD; 61065 carries 20 U+FFFD from the source HTML,2026-10-18
-62149#025,unit,drop,62777#001,identical,,2026-10-18
-62149#026,unit,drop,62777#004,wording,,2026-10-18
-62149#027,unit,drop,62777#006,identical,,2026-10-18
-62149#029,unit,drop,62777#023,identical,,2026-10-18
-62149#030,unit,drop,62777#033,identical,,2026-10-18
-62149#031,unit,drop,62777#038,substantive,older revision; 62777 kept,2026-10-18
-62149#032,unit,drop,62777#046,substantive,older revision; 62777 kept,2026-10-18
-62149#033,unit,drop,62777#057,substantive,older revision; 62777 kept,2026-10-18
-62149#034,unit,drop,62777#061,identical,,2026-10-18
-62149#035,unit,drop,62777#064,identical,,2026-10-18
-62149#036,unit,drop,62777#065,substantive,older revision; 62777 kept,2026-10-18
-62149#037,unit,drop,62777#066,substantive,older revision; 62777 kept,2026-10-18
-62149#039,unit,drop,62777#073,substantive,older revision; 62777 kept,2026-10-18
-62149#040,unit,drop,62777#087,wording,,2026-10-18
-62149#041,unit,drop,62777#084,identical,,2026-10-18
-62149#043,unit,drop,62777#090,identical,,2026-10-18
-62149#044,unit,drop,62777#092,substantive,older revision; 62777 kept,2026-10-18
-62149#045,unit,drop,62777#094,wording,,2026-10-18
-62149#047,unit,drop,62777#015,identical,,2026-10-18
-62149#048,unit,drop,62777#112,identical,,2026-10-18
+id,level,decision,duplicate_of,match,note,decided_at,text_hash
+61065,doc,drop,61081,identical,all 74 units identical after whitespace and U+FFFD; 61065 carries 20 U+FFFD from the source HTML,2026-10-18,9b55a6eb395f
+62149#025,unit,drop,62777#001,identical,,2026-10-18,fc3354abf1e1
+62149#026,unit,drop,62777#004,wording,,2026-10-18,149331abdd3f
+62149#027,unit,drop,62777#006,identical,,2026-10-18,96bacd8e7b00
+62149#029,unit,drop,62777#023,identical,,2026-10-18,44c8b79b5c53
+62149#030,unit,drop,62777#033,identical,,2026-10-18,ed5aaa2f9158
+62149#031,unit,drop,62777#038,substantive,older revision; 62777 kept,2026-10-18,8703fe26f33a
+62149#032,unit,drop,62777#046,substantive,older revision; 62777 kept,2026-10-18,7347b7f74411
+62149#033,unit,drop,62777#057,substantive,older revision; 62777 kept,2026-10-18,ab0a22182667
+62149#034,unit,drop,62777#061,identical,,2026-10-18,77e26c3d7f1b
+62149#035,unit,drop,62777#064,identical,,2026-10-18,0a38e96cfd58
+62149#036,unit,drop,62777#065,substantive,older revision; 62777 kept,2026-10-18,5f0307d8e201
+62149#037,unit,drop,62777#066,substantive,older revision; 62777 kept,2026-10-18,f0b91d7b33e2
+62149#039,unit,drop,62777#073,substantive,older revision; 62777 kept,2026-10-18,1da097e886c4
+62149#040,unit,drop,62777#087,wording,,2026-10-18,e470aaed96d4
+62149#041,unit,drop,62777#084,identical,,2026-10-18,f40c53f763ca
+62149#043,unit,drop,62777#090,identical,,2026-10-18,bec9de30c8a4
+62149#044,unit,drop,62777#092,substantive,older revision; 62777 kept,2026-10-18,b6e8533350a8
+62149#045,unit,drop,62777#094,wording,,2026-10-18,1b72b77dd77c
+62149#047,unit,drop,62777#015,identical,,2026-10-18,fbd36699a00d
+62149#048,unit,drop,62777#112,identical,,2026-10-18,d14b3d334b26
+62777#028,unit,drop,60056#012,wording,same answer but for one word (ได้); 60056 kept for its ชื่อเรื่อง,2026-10-22,26f359ee1e67
+Ins91_241268#006,unit,drop,Ins90_241268#030,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; OCR and wording only,2026-10-22,090849eeda01
+Ins91_241268#007,unit,drop,Ins90_241268#031,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; OCR and wording only,2026-10-22,fd8b9f4db581
+Ins91_241268#012,unit,drop,Ins90_241268#046,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; Ins90 also has the sentence on a change of carer during the year,2026-10-22,547e585825fa
+Ins91_241268#013,unit,drop,Ins90_241268#047,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,22c498cb950e
+Ins91_241268#014,unit,drop,Ins90_241268#048,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,3bc8f4f09dcc
+Ins91_241268#017,unit,drop,Ins90_241268#051,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; Ins90 has one more phrase in the example,2026-10-22,19bd0bb26f76
+Ins91_241268#018,unit,drop,Ins90_241268#052,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,591f800552f2
+Ins91_241268#019,unit,drop,Ins90_241268#053,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; OCR and wording only,2026-10-22,66bb9a0372cc
+Ins91_241268#020,unit,drop,Ins90_241268#054,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,90f9c3477c62
+Ins91_241268#022,unit,drop,Ins90_241268#056,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; OCR and wording only,2026-10-22,5911c933c8f8
+Ins91_241268#024,unit,drop,Ins90_241268#058,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; OCR and wording only,2026-10-22,1cfb2723d667
+Ins91_241268#025,unit,drop,Ins90_241268#059,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; OCR and wording only,2026-10-22,3b9abe03ef22
+Ins91_241268#026,unit,drop,Ins90_241268#060,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,0e59753bc9f7
+Ins91_241268#027,unit,drop,Ins90_241268#061,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; OCR and wording only,2026-10-22,fcd7e4fb27d4
+Ins91_241268#028,unit,drop,Ins90_241268#062,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; OCR and wording only,2026-10-22,28ffb6d03e86
+Ins91_241268#029,unit,drop,Ins90_241268#063,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,5c21102499da
+Ins91_241268#030,unit,drop,Ins90_241268#064,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,852913fa94d1
+Ins91_241268#031,unit,drop,Ins90_241268#065,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,9193449351f9
+Ins91_241268#032,unit,drop,Ins90_241268#066,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,16e1384a8586
+Ins91_241268#033,unit,drop,Ins90_241268#067,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; OCR and wording only,2026-10-22,bf4bb1a99166
+Ins91_241268#034,unit,drop,Ins90_241268#068,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,c0bebd747a3b
+Ins91_241268#035,unit,drop,Ins90_241268#069,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; OCR and wording only,2026-10-22,75cc2d75c52f
+Ins91_241268#037,unit,drop,Ins90_241268#071,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,6573644ab946
+Ins91_241268#043,unit,drop,Ins90_241268#078,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,c9d1eec54528
+Ins91_241268#044,unit,drop,Ins90_241268#079,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,b9defcd63eaf
+Ins91_241268#045,unit,drop,Ins90_241268#080,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; Ins90's copy reads มูลค้ำ for มูลค่า (OCR),2026-10-22,9d6391238575
+Ins91_241268#046,unit,drop,Ins90_241268#081,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,29745972e143
+Ins91_241268#047,unit,drop,Ins90_241268#082,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,632bc426b3cc
+Ins91_241268#048,unit,drop,Ins90_241268#083,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,f45159672d20
+Ins91_241268#050,unit,drop,Ins90_241268#087,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; OCR and wording only,2026-10-22,824be623b5de
+Ins91_241268#051,unit,drop,Ins90_241268#088,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,8994ead93134
+Ins91_241268#052,unit,drop,Ins90_241268#089,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,b94faae4a55e
+Ins91_241268#053,unit,drop,Ins90_241268#090,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; OCR and wording only,2026-10-22,2ccf82592348
+Ins91_241268#054,unit,drop,Ins90_241268#091,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,fbe7a3091936
+Ins91_241268#055,unit,drop,Ins90_241268#092,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; OCR and wording only,2026-10-22,4812f1827838
+Ins91_241268#056,unit,drop,Ins90_241268#093,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,eac210957f0c
+Ins91_241268#057,unit,drop,Ins90_241268#094,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,0a14ca05069e
+Ins91_241268#059,unit,drop,Ins90_241268#101,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,5b404f4c3698
+Ins91_241268#060,unit,drop,Ins90_241268#102,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; OCR and wording only,2026-10-22,71ef1c628004
+Ins91_241268#061,unit,drop,Ins90_241268#103,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,7d3e8a3580b9
+Ins91_241268#062,unit,drop,Ins90_241268#104,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,e79fabe37942
+Ins91_241268#063,unit,drop,Ins90_241268#105,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,9ea605c4af4f
+Ins91_241268#064,unit,drop,Ins90_241268#106,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,33f18072cc46
+Ins91_241268#065,unit,drop,Ins90_241268#107,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,776730368724
+Ins91_241268#066,unit,drop,Ins90_241268#108,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; OCR and wording only,2026-10-22,d73e28460b18
+Ins91_241268#068,unit,drop,Ins90_241268#110,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,73599164c6a7
+Ins91_241268#069,unit,drop,Ins90_241268#111,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,70ea521fb671
+Ins91_241268#071,unit,drop,Ins90_241268#113,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,bc22a93dedd2
+Ins91_241268#072,unit,drop,Ins90_241268#116,identical,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand,2026-10-22,253448b856dc
+Ins94_050668#008,unit,drop,Ins90_241268#045,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; only the form name differs (ภ.ง.ด.90/94),2026-10-22,710b2a7af9fd
+Ins94_050668#010,unit,drop,Ins90_241268#047,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; ภ.ง.ด.94 item numbers and OCR only,2026-10-22,199dd66943d5
+Ins94_050668#014,unit,drop,Ins90_241268#052,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; ภ.ง.ด.94 item numbers and OCR only,2026-10-22,855e0c84de75
+Ins94_050668#022,unit,drop,Ins90_241268#058,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; ภ.ง.ด.94 item numbers and OCR only,2026-10-22,b597e5cc6286
+Ins94_050668#027,unit,drop,Ins90_241268#063,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; ภ.ง.ด.94 item numbers and OCR only,2026-10-22,4878d710c947
+Ins94_050668#028,unit,drop,Ins90_241268#064,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; ภ.ง.ด.94 item numbers and OCR only,2026-10-22,0f494632f653
+Ins94_050668#040,unit,drop,Ins90_241268#080,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; ภ.ง.ด.94 item numbers; Ins90's copy reads มูลค้ำ for มูลค่า (OCR),2026-10-22,39ccf6fe5aa3
+Ins94_050668#041,unit,drop,Ins90_241268#081,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; ภ.ง.ด.94 item numbers and OCR only,2026-10-22,bf368f0d3396
+Ins94_050668#047,unit,drop,Ins90_241268#088,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; ภ.ง.ด.94 item numbers and OCR only,2026-10-22,4c03da5fc0d1
+Ins94_050668#048,unit,drop,Ins90_241268#089,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; ภ.ง.ด.94 item numbers and OCR only,2026-10-22,a4600795224a
+Ins94_050668#054,unit,drop,Ins90_241268#095,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; Ins94 leaves out พิเศษ once in 18.1; both are about Thai ESGX,2026-10-22,ff76334e29a5
+Ins94_050668#055,unit,drop,Ins90_241268#096,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; ภ.ง.ด.94 item numbers and OCR only,2026-10-22,d14738fe5671
+Ins94_050668#063,unit,drop,Ins90_241268#114,wording,same section in the ภ.ง.ด.90 guide; Ins90 kept; diff read by hand; Ins90's copy also carries the page footer,2026-10-22,e90862f9a2e5

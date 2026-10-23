@@ -20,11 +20,11 @@ def _():
 
     ROOT = Path(__file__).parent.parent
     sys.path.insert(0, str(ROOT))  # `marimo run` does not put the repo root on the path
-    from rag import labels
+    from rag import chunk_version, labels
     from rag.answer import KIND_TH, year_label
     from rag.questions import BEHAVIOURAL, load
 
-    return BEHAVIOURAL, KIND_TH, ROOT, html, json, labels, load, mo, year_label
+    return BEHAVIOURAL, KIND_TH, ROOT, chunk_version, html, json, labels, load, mo, year_label
 
 
 @app.cell
@@ -64,17 +64,21 @@ def _(labels, mo, new_name, pick_name, pick_run):
 
 
 @app.cell
-def _(ROOT, json, labels, load, mo, run_id):
+def _(ROOT, chunk_version, json, labels, load, mo, run_id):
     _dir = labels.RUNS / run_id
     records = {r["id"]: r for r in map(json.loads, (_dir / "answers.jsonl").open(encoding="utf-8"))}
     config = json.loads((_dir / "config.json").read_text(encoding="utf-8"))
     chunks = {c["chunk_id"]: c for c in map(json.loads, (ROOT / "rag" / "out" / "chunks.jsonl").open(encoding="utf-8"))}
     questions = {q.id: q for q in load()}
     shared = labels.shared_ids()
+    # labels key on chunk ids: a run made with other chunks is shown for reading only, and nothing is saved
+    view_only = chunk_version.problem(config["retrieval"].get("chunks_sha"), f"run {run_id}")
     _missing = sorted({h["chunk_id"] for r in records.values() for h in r["hits"]} - set(chunks))
-    _warn = mo.callout(f"chunks.jsonl changed since this run: {len(_missing)} retrieved chunks are missing and show without text", kind="warn") if _missing else None
+    _warn = mo.callout(mo.md(f"**ดูได้อย่างเดียว บันทึกไม่ได้** (view only, nothing is saved)\n\n{view_only}"
+                             + (f"\n\n{len(_missing)} retrieved chunks are not in the current chunks.jsonl and show without text." if _missing else "")),
+                       kind="danger") if view_only else None
     _warn
-    return chunks, config, questions, records, shared
+    return chunks, config, questions, records, shared, view_only
 
 
 @app.cell
@@ -200,8 +204,9 @@ def _(form):
 
 
 @app.cell
-def _(form, hits, labels, mo, qid, reviewer, run_id, set_saved):
+def _(form, hits, labels, mo, qid, reviewer, run_id, set_saved, view_only):
     mo.stop(form.value is None)
+    mo.stop(view_only is not None, mo.callout("ไม่ได้บันทึก: run นี้สร้างจาก chunks คนละรุ่นกับที่มีอยู่ (ดูข้อความด้านบน)", kind="danger"))
     _v = form.value
     _missing = [k for k in ("grounded", "correct", "useful", "behaviour") if k in _v and not _v[k]]
     _missing += [f"chunk {i}" for i in range(1, len(hits) + 1) if not _v[f"c{i}"]]

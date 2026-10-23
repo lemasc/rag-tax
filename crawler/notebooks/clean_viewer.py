@@ -257,12 +257,14 @@ def _(mo, units):
     u_flag = mo.ui.multiselect(sorted({_f for _u in units for _f in _u["flags"]}), label="Has flag (empty = any)")
     u_doc = mo.ui.checkbox(value=True, label="Only the selected document (if it has units)")
     u_q = mo.ui.text(placeholder="text contains…", label="Search")
-    mo.hstack([u_type, u_flag, u_doc, u_q], justify="start", gap=2, align="end", wrap=True)
-    return u_doc, u_flag, u_q, u_type
+    # a dropped duplicate stays in units.jsonl with include=false (unit_decisions.csv); the chunker skips it
+    u_inc = mo.ui.radio(["included", "dropped", "all"], value="included", inline=True, label="Units")
+    mo.hstack([u_type, u_flag, u_inc, u_doc, u_q], justify="start", gap=2, align="end", wrap=True)
+    return u_doc, u_flag, u_inc, u_q, u_type
 
 
 @app.cell
-def _(mo, table, u_doc, u_flag, u_q, u_type, units, units_of):
+def _(mo, table, u_doc, u_flag, u_inc, u_q, u_type, units, units_of):
     _sel = table.value[0]["id"] if table.value else None
     _only = _sel if (u_doc.value and _sel in units_of) else None
     _q = u_q.value.strip()
@@ -272,11 +274,13 @@ def _(mo, table, u_doc, u_flag, u_q, u_type, units, units_of):
         and (_only is None or _u["doc_id"] == _only)
         and (not u_flag.value or set(u_flag.value) & set(_u["flags"]))
         and (not _q or _q in _u["text"])
+        and (u_inc.value == "all" or _u["include"] == (u_inc.value == "included"))
     ]
     unit_table = mo.ui.table(
         [
             {"unit": _u["unit_id"], "label": _u["label"], "section": (_u["section"] or "")[:40], "title": (_u["title"] or "")[:40],
-             "chars": len(_u["text"]), "flags": ", ".join(_u["flags"]), "notes": len(_u["notes"]), "start": _u["text"][:70].replace("\n", " ")}
+             "chars": len(_u["text"]), "flags": ", ".join(_u["flags"]), "notes": len(_u["notes"]),
+             "duplicate_of": _u["duplicate_of"] or "", "start": _u["text"][:70].replace("\n", " ")}
             for _u in shown_units
         ],
         selection="single", page_size=10,
@@ -299,6 +303,7 @@ def _(mo, scroll, unit_table, units, units_of):
         + (f"  \nsection: {_u['section']}" if _u["section"] else "")
         + (f"  \ntitle: {_u['title']}" if _u["title"] else "")
         + (f"  \nflags: `{'`, `'.join(_u['flags'])}`" if _u["flags"] else "")
+        + (f"  \n**dropped**: duplicate of `{_u['duplicate_of']}` (unit_decisions.csv)" if not _u["include"] else "")
     )
     _parts = [mo.md(_meta), scroll(_u["text"], "50vh")]
     if _u["notes"]:

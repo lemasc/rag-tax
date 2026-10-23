@@ -37,3 +37,38 @@ def test_ocr_documents_in_the_built_corpus():
         starts = [s for _, s in d["pages"]]
         assert starts[0] == 0 and starts == sorted(starts) and starts[-1] < len(d["text"]), d["doc_id"]
         assert [p for p, _ in d["pages"]] == list(range(1, len(d["pages"]) + 1)), d["doc_id"]
+
+
+def test_replace_pages_swaps_one_pages_content_and_keeps_the_anchors():
+    from crawler.clean.pages import replace_pages
+
+    text = "<!-- page 1 -->\n\nก\n\n<!-- page 2 -->\n\nข\n\n<!-- page 3 -->\n\nค"
+    out, done = replace_pages(text, {2: "ใหม่\n"})
+    assert done == [2]
+    assert take_page_anchors(out)[0] == "ก\n\nใหม่\n\nค"
+    assert [p for p, _ in take_page_anchors(out)[1]] == [1, 2, 3]
+
+
+def test_replace_pages_fails_on_a_page_the_text_does_not_have():
+    from crawler.clean.pages import replace_pages
+
+    with pytest.raises(ValueError, match="7"):
+        replace_pages("<!-- page 1 -->\n\nก", {7: "x"})
+
+
+def test_demote_headings_makes_only_the_decided_headings_plain():
+    from crawler.clean.pages import demote_headings
+
+    text = "<!-- page 1 -->\n\n# 9. ก\n\n### 10.1 ข ยาว\n\n**10.2 ค**\n\n<!-- page 2 -->\n\n### 10.1 ข ยาว"
+    rows = [dict(page="1", text="10.1 ข", decision="demote"), dict(page="1", text="10.2", decision="demote"),
+            dict(page="1", text="9.", decision="keep")]
+    out, n = demote_headings(text, rows)
+    assert n == 2
+    assert out == "<!-- page 1 -->\n\n# 9. ก\n\n10.1 ข ยาว\n\n10.2 ค\n\n<!-- page 2 -->\n\n### 10.1 ข ยาว"  # page 2 untouched
+
+
+def test_demote_headings_fails_on_a_row_that_matches_nothing():
+    from crawler.clean.pages import demote_headings
+
+    with pytest.raises(ValueError, match="10.9"):
+        demote_headings("<!-- page 1 -->\n\n# ก", [dict(page="1", text="10.9", decision="demote")])

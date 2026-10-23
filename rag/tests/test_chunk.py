@@ -1,14 +1,16 @@
 """rag.chunk: packing invariants on synthetic text (characters as tokens), and the built chunk table."""
 
+import hashlib
 import json
 from pathlib import Path
 
 import pytest
 
-from rag.chunk import MAX_TOKENS, hard_cut, make_chunks, split
+from rag.chunk import MAX_TOKENS, TOKENIZER, WINDOW_TOKENS, hard_cut, make_chunks, split
 
 CHUNKS = Path(__file__).parent.parent / "out" / "chunks.jsonl"
 CLEAN = Path(__file__).parent.parent.parent / "crawler" / "data" / "clean"
+FREEZE = Path(__file__).parent.parent / "chunks_freeze.json"
 
 
 def squash(s: str) -> str:
@@ -28,6 +30,27 @@ def test_split_packs_short_paragraphs_together():
 
 def test_hard_cut_takes_longest_prefixes():
     assert hard_cut("abcdefg", 3, len) == ["abc", "def", "g"]
+
+
+def test_split_table_parts_repeat_the_header_row_and_separator():
+    head = "| ลำดับ | ชื่อ |\n| --- | --- |"
+    rows = [f"| {i} | พรรค{i} |" for i in range(1, 9)]
+    text = "ก่อนตาราง\n" + head + "\n" + "\n".join(rows) + "\nหลังตาราง"
+    parts = split(text, 60, len)
+    assert len(parts) > 2 and all(len(p) <= 60 for p in parts)
+    assert parts[0].startswith("ก่อนตาราง\n" + head)
+    later = [p for p in parts[1:] if p.startswith("|")]
+    assert later and all(p.startswith(head + "\n| ") for p in later)
+    body = [ln for p in parts for ln in p.split("\n") if ln not in head.split("\n") and ln.startswith("| ")]
+    assert body == rows  # every row once, in order
+    assert parts[-1].endswith("หลังตาราง")
+
+
+def test_split_gives_prose_after_a_table_no_header():
+    text = "| a | b |\n| --- | --- |\n| 1 | 2 |\n" + "\n".join(["ข้อความหลังตารางยาวๆ"] * 6)
+    parts = split(text, 40, len)
+    assert len(parts) > 2 and parts[0].startswith("| a | b |\n| --- | --- |\n| 1 | 2 |")
+    assert all("| a |" not in p for p in parts[1:])
 
 
 def doc(doc_id, include=True, text="", preamble=""):
@@ -74,3 +97,12 @@ def test_built_chunks_cover_exactly_the_included_units(built):
     want = {u["unit_id"] for u in units if u["include"] and docs[u["doc_id"]]["include"]}
     assert {c["unit_id"] for c in built if c["unit_id"]} == want
     assert {c["doc_id"] for c in built} == {d for d, r in docs.items() if r["include"]}
+
+
+def test_built_chunks_are_the_frozen_ones():
+    """Qrels key on chunk ids, so the chunk table changes only on purpose: regenerate, re-map the qrels, update the freeze."""
+    if not CHUNKS.exists():
+        pytest.skip("rag/out/chunks.jsonl not built")
+    freeze = json.loads(FREEZE.read_text(encoding="utf-8"))
+    assert (TOKENIZER, MAX_TOKENS, WINDOW_TOKENS) == (freeze["tokenizer"], freeze["max_tokens"], freeze["window_tokens"])
+    assert hashlib.sha256(CHUNKS.read_bytes()).hexdigest() == freeze["sha256"], "chunks.jsonl differs from rag/chunks_freeze.json"

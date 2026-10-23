@@ -38,11 +38,28 @@ HEADER = re.compile(r"^\s*(หน้า\s*\d+|เล่ม\s*\d+\s*ตอน(?:(
 THAI_GAP = re.compile(r"(?<=[฀-๿]) (?=[฀-๿])")
 
 
+BLOCKS = {"p", "div", "li", "ul", "ol", "tr", "table", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "center", "pre"}
+
+
 def html_text(path: Path) -> str:
+    """Text of the main column with HTML's own line structure: a line break at <br> and around block elements (an
+    amending กฎกระทรวง keeps its items in one <p> split by <br>), whitespace inside the source collapsed to a space."""
     doc = lh.fromstring(path.read_bytes())
     for bad in doc.xpath("//script|//style|//noscript"):
         bad.drop_tree()
     main = (doc.xpath('//div[contains(@class,"col-main")]') or [doc])[0]
+    for el in main.iter():
+        if isinstance(el.tag, str) and el.text:
+            el.text = re.sub(r"\s+", " ", el.text)
+        if el.tail:
+            el.tail = re.sub(r"\s+", " ", el.tail)
+    for el in main.iter():
+        if not isinstance(el.tag, str):
+            continue
+        if el.tag == "br":
+            el.tail = "\n" + (el.tail or "")
+        elif el.tag in BLOCKS:
+            el.text, el.tail = "\n" + (el.text or ""), "\n" + (el.tail or "")
     return "\n".join(line.strip() for line in main.text_content().splitlines())
 
 
