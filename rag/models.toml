@@ -67,7 +67,7 @@ rpm = 18  # a profile's rpm overrides its backend's; OpenRouter limits new accou
 [models.judge-deepseek]
 backend = "openrouter"
 model = "deepseek/deepseek-v4.1-flash"
-params = { temperature = 0 }
+params = { temperature = 0, max_tokens = 10000 }  # a reasoning model: one earlier call ran to 131,072 tokens; 10,000 is above the 99th percentile (9.8k) of 1,321 calls
 
 # gpt-6-sol again, through OpenRouter (2026-10-23): finishes the pooled-ranking grades (rag.pooled) after the OpenAI credit
 # ran out. Same model and reasoning effort as `judge`, but another route: the pairs it grades are marked in the notes of E1.
