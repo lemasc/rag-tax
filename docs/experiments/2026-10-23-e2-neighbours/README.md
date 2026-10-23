@@ -8,7 +8,7 @@ Status: done 2026-10-23. Plan: [`../../plans/ablation-plan-retrieval-context-gen
 - Sample: chunks graded 1 (panel median) in the dense or hybrid top 5 of E1, two strata reported separately.
   - clause: `origin == "clause"`, 218 pairs from 115 questions (111 distinct chunks).
   - later-part: a later part (part > 1) of a split statute or annex unit, 59 pairs from 48 questions, **12 distinct chunks** (a few chunks come up under many questions).
-  - Sparse-only chunks, boilerplate (none matched) and chunks with no neighbour that fits (none) were left out; windows, FAQ and guide chunks are not expanded (see the plan). 1,594 chunk-question pairs were of other types.
+  - Sparse-only chunks, boilerplate (none matched: none of the 15 boilerplate chunks is in any mode's E1 top 5) and chunks with no neighbour that fits (none) were left out; windows, FAQ and guide chunks are not expanded (see the plan). 1,594 chunk-question pairs were of other types.
 - Dilution sample: 54 chunks graded 2 in the same strata (40 clause, 14 later-part; seeded, 32 more were not sampled).
 - Two conditions per pair, graded by the three judges (all on OpenRouter) in the batches of `rag.depth`, blind to the E1 grade (the judge does see the marker on the neighbouring text, so it can tell the expanded condition):
   - **alone**: the chunk as in E1, the control (the noise floor);
@@ -34,7 +34,7 @@ Status: done 2026-10-23. Plan: [`../../plans/ablation-plan-retrieval-context-gen
 - The noise floor is large: about 10% of the 1s are 2 when asked again alone (16% for sol). Among the 1s, haiku moves 21 chunks up to 2 expanded but 16 chunks it graded 2 alone fall to 1, so much of the movement is re-grading noise.
 
 **Reading it**
-- The plan's rule was 10 points over the noise floor. The clause gain of +.06 is real (interval above zero) but below that: about 13 of the 218 clause pairs are upgraded. By the plan's outcome table: "about the floor" for most of the sample, with a small effect on clauses.
+- The plan's rule was 10 points over the noise floor. The clause gain of +.06 is real (interval above zero) but below that (the interval's upper end, +.10, does not rule 10 points out; the decision rests on the estimate): about 13 of the 218 clause pairs are upgraded. By the plan's outcome table: "about the floor" for most of the sample, with a small effect on clauses.
 - The later-part stratum, where a hand review of 10 chunks (1 yes, 3 unsure, 6 no) was most hopeful, shows nothing, on only 12 distinct chunks.
 - The 1s are mostly on-topic misses (the chunk is about a different subtopic), not clauses missing a condition next door.
 - Decision: neighbours are out of E3. A neighbours variant would cost about a quarter of E3's judge bill for a grade gain of about six points on a third of the questions. The k = 10 control stays.
@@ -54,4 +54,6 @@ Status: done 2026-10-23. Plan: [`../../plans/ablation-plan-retrieval-context-gen
 
 **Cost**: not tallied from the cache; the price file estimates about $2.1 for about 280 calls per judge (this run made 314).
 
-**Fix made after the run**: the report crashed on a numpy integer when saving `summary.json`; fixed in `rag/neighbours.py`.
+**Fixes made after the run** (`rag/neighbours.py`; the numbers above did not change):
+- the report crashed on a numpy integer when saving `summary.json`;
+- the per-judge rows now keep only grades of the text the sample shows (as the panel rows already did), and are listed once, under the median, since one judge's grade is the same under either rule.

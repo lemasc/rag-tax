@@ -263,9 +263,10 @@ def summarise(sample: list[dict], per_judge: dict[str, list[dict]]) -> dict:
         res = {}
         for label, rows in groups.items():
             res[label] = dict(gain=effect(rows, grade_of, 1), dilution=_dilution(rows, grade_of))
-        for j, rows in per_judge.items():
-            by = {(r["id"], r["chunk_id"], r["condition"]): r["grade"] for r in rows}
-            res[f"judge:{j}"] = dict(gain=effect(sample, lambda r, c, by=by: by.get((r["id"], r["chunk_id"], c)), 1))
+        if not strict:  # one judge's grade is the same under either rule: listed once
+            for j in per_judge:
+                by = combined({j: per_judge[j]}, sample, strict=False)
+                res[f"judge:{j}"] = dict(gain=effect(sample, lambda r, c, by=by: by.get((r["id"], r["chunk_id"], c)), 1))
         out[name] = res
     return out
 

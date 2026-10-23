@@ -60,7 +60,11 @@ class Reply:
 
 class Truncated(ValueError):
     """The reply hit the token cap, also after asking again with a larger one. Not cached; callers that skip a bad
-    reply (`except ValueError`) skip this too."""
+    reply (`except ValueError`) skip this too. `usage` is what the calls were paid for, since no cache file keeps it."""
+
+    def __init__(self, message: str, usage: dict | None = None):
+        super().__init__(message)
+        self.usage = usage or {}
 
 
 def read_config(path: Path = MODELS) -> dict:
@@ -142,7 +146,8 @@ def chat(p: Profile | str, messages: list[dict], *, json_out: bool = False, use_
         usage = usage | {k: first.get(k, 0) + usage.get(k, 0) for k in TOTALS}  # both calls were paid
     seconds = round(time.monotonic() - t, 2)
     if finish == "length":
-        raise Truncated(f"{p.name} reply cut off at {used.get(cap_name, 'its own limit')} tokens: {text[:200]!r}")
+        raise Truncated(f"{p.name} reply cut off at {used.get(cap_name, 'its own limit')} tokens "
+                        f"(paid {usage.get('prompt_tokens', 0)} in, {usage.get('completion_tokens', 0)} out): {text[:200]!r}", usage)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(dict(

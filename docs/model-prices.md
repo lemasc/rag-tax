@@ -54,14 +54,15 @@ extraction 0.4k / 0.3k; RAGAS answer relevance 0.3k / 0.2k. One scored answer is
 |---|---|---|---|---|
 | E1 (done, for scale) | about $7 | about $0.9 | about $1.5 | about $9.5 |
 | E2 (about 280 calls per judge) | about $1.3 | about $0.25 | about $0.55 | about $2.1 |
-| E3 (about 520 answers, about 1,900 calls per judge) | $12–14 | $1.7–1.8 | about $3.7 | about $17.5–19.5, plus about $0.2 generation |
+| E3 (3 variants, about 390 answers, about 1,400 calls per judge) | $9–10.5 | about $1.3 | about $2.8 | about $13–15, plus about $0.15 generation |
 | E4 (about 500 answers) | $11.5–13.5 | about $1.7 | about $3.6 | about $17–19, plus generators (under $1, not priced) |
 
 How they were made:
-- Sol input and output tokens are scaled from the per-task numbers above (E3 about 3.0–3.5M in and 0.6–0.7M out). Haiku
-  and DeepSeek reuse their measured tokens per call. The k = 10 and neighbour variants add input tokens, so E3 may run
-  higher.
-- Generator calls (E3: 520 on luna) are under $1. E4's generators are priced when the list is fixed.
+- Sol input and output tokens are scaled from the per-task numbers above (E3 about 2.3–2.6M in and 0.45–0.5M out). Haiku
+  and DeepSeek reuse their measured tokens per call. The k = 10 variant adds input tokens, so E3 may run
+  higher. E3 was first priced with 4 variants (about 520 answers); the neighbour variant was dropped after E2.
+- Generator calls (E3: about 390 on luna) are under $1. E4's generators are priced when the list is fixed.
 - DeepSeek's output share is the biggest uncertainty: its output tokens vary a lot per call. A `max_tokens` cap in
   `models.toml` bounds the worst case.
-- Sol dominates the bill: about 70% of E3 and E4.
+- Sol dominates the bill: about 70% of E3 and E4. Sol's share of E3 alone is above OpenRouter's daily limit of $8 (E2 notes):
+  raise the limit or split sol over two days.

@@ -101,8 +101,9 @@ def test_reply_cut_off_twice_raises_and_is_not_cached(monkeypatch, tmp_path):
     seen = _scripted(monkeypatch, tmp_path, [("", "length"), ("{", "length"), ("", "length"), ("{", "length")])
     p = llm.profile("judge", CONFIG)
     msg = [{"role": "user", "content": "ถาม"}]
-    with pytest.raises(llm.Truncated, match="cut off at 200"):
+    with pytest.raises(llm.Truncated, match="cut off at 200") as e:
         llm.chat(p, msg, max_tokens=100)
+    assert e.value.usage["completion_tokens"] == 10  # both calls were paid, and nothing else records them
     with pytest.raises(ValueError):  # nothing was cached, so the next call goes out again
         llm.chat(p, msg, max_tokens=100)
     assert len(seen) == 4

@@ -2,7 +2,7 @@
 
 Status: retrieval-side tests finished 2026-10-23; **the E3 baseline decision at the end is not yet confirmed**, so the plan holds no summary of this yet. Follows [E1](../2026-10-23-e1-ranking-ablation/README.md). Scratch scripts for the tests live outside the repo; nothing in the frozen chunks changed.
 
-Entries are in the order they were done.
+Entries are in the order they were done. Here "k" (RRF_K, "hybrid k = 10") is the RRF fusion constant, not the number of chunks the generator sees (the "k = 10" of E3 in the plan).
 
 
 ## Pending investigation: why hybrid does not beat dense (not run)

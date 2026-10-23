@@ -277,48 +277,6 @@
     "alone_below_2": 0.5185185185185185,
     "difference": -0.14814814814814814
    }
-  },
-  "judge:judge-sol-or": {
-   "gain": {
-    "n": 277,
-    "questions": 143,
-    "chunks": 123,
-    "expanded_is_2": 0.20938628158844766,
-    "alone_is_2": 0.1588447653429603,
-    "difference": 0.05054151624548736,
-    "lo": -0.0066532304904397925,
-    "hi": 0.10465221224078583,
-    "per_chunk_difference": 0.059670106316447785,
-    "chunks_that_gain": 21
-   }
-  },
-  "judge:judge-haiku": {
-   "gain": {
-    "n": 277,
-    "questions": 143,
-    "chunks": 123,
-    "expanded_is_2": 0.17328519855595667,
-    "alone_is_2": 0.148014440433213,
-    "difference": 0.02527075812274368,
-    "lo": -0.025186723348593853,
-    "hi": 0.07575757575757576,
-    "per_chunk_difference": 0.006367074659757586,
-    "chunks_that_gain": 14
-   }
-  },
-  "judge:judge-deepseek": {
-   "gain": {
-    "n": 277,
-    "questions": 143,
-    "chunks": 123,
-    "expanded_is_2": 0.15162454873646208,
-    "alone_is_2": 0.12274368231046931,
-    "difference": 0.02888086642599278,
-    "lo": -0.019011406844106463,
-    "hi": 0.07220216606498195,
-    "per_chunk_difference": 0.016165609458292384,
-    "chunks_that_gain": 15
-   }
   }
  }
 }
