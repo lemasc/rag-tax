@@ -203,7 +203,10 @@ From the swap on, luna is a judge and not a generator: it would grade its own an
 **Design.**
 - Variant: dense top 50 → a multilingual cross-encoder (`BAAI/bge-reranker-v2-m3`, runs on CPU) → top 10. The candidates are dense's own, so only the order changes: the effect is the reranker's alone.
 - Added to E1's pool as a variant (`rag/pooled.py`): only the chunks nobody graded are graded, by the panel S settles on. Expected about 3–5 new chunks per question, about one call per question per judge.
-- Metrics and intervals as in E1, against dense, per question.
+- Metrics and intervals as in E1, against dense, per question. The pool grows, so E1's own numbers move a little; dense is re-scored on the same, larger pool.
+- **Free check, no extra calls:** the same comparison with haiku and DeepSeek alone, a 2 needing both (`--judges judge-haiku judge-deepseek`).
+- **When sol is added (fixed before the run):** only if the main result (new panel, median) is borderline: the reranker − dense interval on hit@5 or nDCG@10 touches 0, or the free check gives the other sign on either. Then sol grades E1b's new pairs (about $3–4) and the comparison is also reported under the old panel. Otherwise sol is not used.
+- Run: `uv run python -m rag.pooled --rerank --dry` builds the variant and counts the calls; `uv run python -m rag.pooled --rerank --judges judge-luna-or judge-haiku judge-deepseek` grades and reports to `summary-luna-or+haiku+deepseek.json` (the published `summary.json` stays).
 
 **Outcomes and what we do.**
 
