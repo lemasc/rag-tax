@@ -17,9 +17,15 @@ Metrics per mode (a 2 is the panel median, or all three judges when strict):
 A question with no 2 in the pool counts 0 for hit and MRR and is left out of recall and nDCG (no mode can score there);
 `no_two` lists them. Differences between modes are paired by question, with a bootstrap interval.
 
+Reranker (`--rerank`, E1b): dense's top DEPTH (50) reordered by a cross-encoder (RERANKER) that reads the retrieval query
+and each chunk's header + body together; its top TOP is the variant `dense-rerank`, added to the pool like the others.
+
 Variants (`--variants 10 20`): hybrid again with another RRF constant k. Their top TOP is added to each question's pool, so
 the chunks they bring in are graded like the rest and every mode is scored against the same, larger pool; the baseline
 numbers move a little when the pool grows. The first variant declared is the one tested; the others are a sensitivity table.
+
+A report with another panel than PANEL (`--judges`) goes to summary-<judges>.json, so the published summary.json stays.
+Two judges are allowed: the lower middle of two grades is the lower one, so a 2 needs both.
 
 Output: rag/out/pooled/pool.jsonl (the pool and each mode's top TOP), judgments/<judge>.jsonl, summary.json
 Run   : uv run python -m rag.pooled --dry     # build the pool, print its size and the number of judge calls
@@ -41,7 +47,7 @@ import numpy as np
 
 from rag import chunk_version, evaluate, llm
 from rag.answer import retrieval_query
-from rag.chunk import OUT as CHUNKS, read_jsonl
+from rag.chunk import OUT as CHUNKS, passage, read_jsonl
 from rag.depth import SEED, batches, grade_batch
 from rag.panel import median
 from rag.questions import BEHAVIOURAL, Question, dev, history, load
@@ -53,6 +59,8 @@ PANEL = ["judge-sol-or", "judge-haiku", "judge-deepseek"]  # gpt-6-sol (through 
 TOP = 10  # each mode's ranking is cut here before pooling, and scored here
 BOOTSTRAP = 2000
 GRADINGS = (("median", False), ("strict", True))  # a 2 is the panel median / all three judges
+RERANKER = "BAAI/bge-reranker-v2-m3"  # multilingual cross-encoder (Thai included), runs on CPU
+RERANKED = "dense-rerank"
 
 
 # ---------------------------------------------------------------- the pool
@@ -88,7 +96,8 @@ def ranking(item: dict, mode: str) -> list[str]:
 def modes_of(items: list[dict]) -> list[str]:
     """The three modes, then the variants every question has."""
     names = set.intersection(*(set(it.get("variants", {})) for it in items)) if items else set()
-    return [*MODES, *sorted(names, key=lambda n: int(n.rsplit("k", 1)[1]))]
+    rrf_k = sorted((n for n in names if n.startswith("hybrid-k")), key=lambda n: int(n.rsplit("k", 1)[1]))
+    return [*MODES, *rrf_k, *sorted(names - set(rrf_k))]
 
 
 def add_variant(item: dict, name: str, chunk_ids: list[str], sha: dict[str, str]) -> int:
@@ -112,6 +121,22 @@ def build_variants(retriever, items: list[dict], ks: list[int]) -> dict[str, int
         for k in ks:
             top = [ids[i] for i, _ in rrf([dense, sparse], k)[:TOP]]
             added[f"hybrid-k{k}"] += add_variant(it, f"hybrid-k{k}", top, sha)
+    return added
+
+
+def build_rerank(retriever, items: list[dict], device: str | None = None) -> int:
+    """dense's top DEPTH for each item reordered by the cross-encoder; its top TOP added as RERANKED. Returns new pairs."""
+    from sentence_transformers import CrossEncoder
+
+    model = CrossEncoder(RERANKER, device=device, max_length=1024)
+    chunks = retriever.chunks
+    sha = {c["chunk_id"]: hashlib.sha1(c["text"].encode()).hexdigest()[:12] for c in chunks}
+    added = 0
+    for it in items:
+        dense, _, _ = retriever.rankings(it["query"])
+        scores = model.predict([(it["query"], passage(chunks[i])) for i in dense], batch_size=16)
+        order = [i for _, i in sorted(zip(scores, dense), key=lambda x: -x[0])]
+        added += add_variant(it, RERANKED, [chunks[i]["chunk_id"] for i in order[:TOP]], sha)
     return added
 
 
@@ -311,6 +336,7 @@ def main() -> None:
     ap.add_argument("--rebuild", action="store_true", help="retrieve again even when pool.jsonl exists")
     ap.add_argument("--judges", nargs="+", default=PANEL)
     ap.add_argument("--variants", nargs="+", type=int, metavar="K", help="add hybrid with these RRF constants to the pool (the first is the tested one)")
+    ap.add_argument("--rerank", action="store_true", help=f"add {RERANKED}: dense's top 50 reordered by {RERANKER}")
     a = ap.parse_args()
 
     pool_path = OUT / "pool.jsonl"
@@ -334,6 +360,15 @@ def main() -> None:
         pool_path.write_text("".join(json.dumps(i, ensure_ascii=False) + "\n" for i in items), encoding="utf-8")
         (OUT / "pool_config.json").write_text(json.dumps(config | dict(variants=a.variants, tested_variant=f"hybrid-k{a.variants[0]}"), indent=1), encoding="utf-8")
         print("new pairs in the pools:", added)
+    if a.rerank and not all(RERANKED in it.get("variants", {}) for it in items):
+        from rag.retrieve import Retriever
+
+        chunk_version.require(config["chunks_sha"], "the pooled ranking pool")
+        added = build_rerank(Retriever(), items)
+        pool_path.write_text("".join(json.dumps(i, ensure_ascii=False) + "\n" for i in items), encoding="utf-8")
+        config |= dict(rerank=dict(variant=RERANKED, model=RERANKER, candidates="dense top 50", top=TOP))
+        (OUT / "pool_config.json").write_text(json.dumps(config, indent=1), encoding="utf-8")
+        print(f"new pairs in the pools: {RERANKED} {added}")
     sha = config["chunks_sha"]
     chunk_version.require(sha, "the pooled ranking pool")
     n_pairs = sum(len(i["pool"]) for i in items)
@@ -358,11 +393,12 @@ def main() -> None:
         if a.report and to_grade:
             print("some pairs are not graded yet: run without --report")
         return
-    if len(a.judges) < 3:
-        print("fewer than three judges: graded and saved, but no report (a panel median needs three)")
+    if len(a.judges) < 2:
+        print("one judge: graded and saved, but no report")
         return
     s = summarise(items, per_judge)
-    (OUT / "summary.json").write_text(json.dumps(s, ensure_ascii=False, indent=1), encoding="utf-8")
+    name = "summary.json" if a.judges == PANEL else f"summary-{'+'.join(j.removeprefix('judge-') for j in a.judges)}.json"
+    (OUT / name).write_text(json.dumps(s, ensure_ascii=False, indent=1), encoding="utf-8")
     print_summary(s)
 
 
