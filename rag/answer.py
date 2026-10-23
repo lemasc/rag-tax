@@ -5,6 +5,10 @@ question; to ask back when the question lacks facts the answer depends on; to co
 which tax year or document year a figure comes from (the corpus mixes 2560-2568 material, see rag-baseline.md).
 Change PROMPT_VERSION whenever SYSTEM or the context format changes: it is part of every run's record.
 
+No retrieval (`--mode none`, E3's lower bound): SYSTEM_NO_SOURCES keeps SYSTEM's rules except the sources-only and
+citation ones, and the question goes without sources; NO_SOURCES_VERSION is its own prompt version. Any [n] in such
+an answer is recorded as a bad citation.
+
 Multi-turn sets: the retrieval query is the earlier questions of the set plus the current one; the generator sees
 the earlier turns as a conversation (question and its own answer) and gets sources only for the current turn.
 
@@ -12,6 +16,7 @@ Output: rag/out/runs/<run_id>/answers.jsonl (one record per question) and config
 Run   : uv run python -m rag.answer --subset dev --gen gpt-mini [--mode hybrid] [-k 5] [--max-per-doc 2]
         uv run python -m rag.answer --ids Q0045,Q0343 --gen gpt-mini
         uv run python -m rag.answer --subset ablation --gen typhoon --mode dense   # E3 baseline
+        uv run python -m rag.answer --subset ablation --gen typhoon --mode none    # E3 no retrieval
 """
 
 import argparse
@@ -30,6 +35,8 @@ from rag.questions import Question, ablation, dev, history, load
 from rag.retrieve import MODES
 
 PROMPT_VERSION = "v1"
+NO_SOURCES_VERSION = "n1"
+NONE = "none"  # the mode that retrieves nothing
 RUNS = OUT / "runs"
 WORKERS = 4
 
@@ -42,6 +49,15 @@ SYSTEM = """คุณเป็นผู้ช่วยตอบคำถาม�
 4. ถ้าคำถามตั้งอยู่บนความเข้าใจผิด ให้ชี้แจงให้ถูกต้องตามเอกสาร
 5. เมื่อให้ตัวเลข วงเงิน หรืออัตรา ให้บอกปีภาษีหรือปีของเอกสารที่มาด้วย ถ้าเอกสารต่างปีให้ตัวเลขไม่ตรงกัน ให้บอกทั้งสองค่าและปีของแต่ละค่า
 6. ตอบเป็นภาษาไทย กระชับ ตรงประเด็น"""
+
+SYSTEM_NO_SOURCES = """คุณเป็นผู้ช่วยตอบคำถามเรื่องภาษีเงินได้บุคคลธรรมดาของไทย โดยอาศัยความรู้ของคุณเอง ไม่มีเอกสารอ้างอิงให้
+
+กติกา
+1. ถ้าไม่แน่ใจหรือไม่มีข้อมูลพอจะตอบ ให้บอกตรง ๆ อย่าเดา
+2. ถ้าคำถามขาดข้อมูลที่จำเป็นต่อคำตอบ (เช่น รายได้ทั้งปี ประเภทเงินได้ สถานะสมรส) ให้ถามกลับว่าต้องการข้อมูลใด และอธิบายหลักเกณฑ์ที่เกี่ยวข้องเท่าที่ทำได้
+3. ถ้าคำถามตั้งอยู่บนความเข้าใจผิด ให้ชี้แจงให้ถูกต้อง
+4. เมื่อให้ตัวเลข วงเงิน หรืออัตรา ให้บอกปีภาษีที่ตัวเลขนั้นใช้ด้วย
+5. ตอบเป็นภาษาไทย กระชับ ตรงประเด็น"""
 
 KIND_TH = {
     "faq": "คำถาม-คำตอบ กรมสรรพากร", "article": "บทความ กรมสรรพากร", "ruling": "ข้อหารือภาษีอากร",
@@ -83,12 +99,13 @@ def retrieval_query(q: Question, earlier: list[Question]) -> str:
     return "\n".join([p.text for p in earlier] + [q.text])
 
 
-def messages_for(question: str, hits: list[dict], turns: list[tuple[str, str]] = ()) -> list[dict]:
-    """System prompt, earlier (question, answer) turns without their sources, then this turn with its sources."""
-    msgs = [{"role": "system", "content": SYSTEM}]
+def messages_for(question: str, hits: list[dict] | None, turns: list[tuple[str, str]] = ()) -> list[dict]:
+    """System prompt, earlier (question, answer) turns without their sources, then this turn with its sources.
+    `hits` None: no retrieval, the no-sources prompt and the bare question."""
+    msgs = [{"role": "system", "content": SYSTEM if hits is not None else SYSTEM_NO_SOURCES}]
     for q, a in turns:
         msgs += [{"role": "user", "content": q}, {"role": "assistant", "content": a}]
-    return msgs + [{"role": "user", "content": user_message(question, hits)}]
+    return msgs + [{"role": "user", "content": user_message(question, hits) if hits is not None else question}]
 
 
 def citations(answer: str, hits: list[dict]) -> tuple[list[str], list[int]]:
@@ -97,7 +114,7 @@ def citations(answer: str, hits: list[dict]) -> tuple[list[str], list[int]]:
     return [hits[n - 1]["chunk_id"] for n in nums if 1 <= n <= len(hits)], [n for n in nums if not 1 <= n <= len(hits)]
 
 
-def answer(gen: llm.Profile, question: str, hits: list[dict], turns: list[tuple[str, str]] = ()) -> tuple[str, int, llm.Reply]:
+def answer(gen: llm.Profile, question: str, hits: list[dict] | None, turns: list[tuple[str, str]] = ()) -> tuple[str, int, llm.Reply]:
     """The answer, the characters of reasoning cut from it (the raw reply stays in the cache) and the reply."""
     r = llm.chat(gen, messages_for(question, hits, turns))
     text, thinking = strip_thinking(r.text)
@@ -119,7 +136,10 @@ def run(qs: list[Question], all_qs: list[Question], gen_name: str, mode: str, k:
     from rag.retrieve import Retriever
 
     gen = llm.profile(gen_name)
-    run_id = f"{time.strftime('%Y%m%d')}-{subset}-{gen_name}-{mode}-k{k}{f'-cap{max_per_doc}' if max_per_doc else ''}-{PROMPT_VERSION}"
+    if mode == NONE:
+        run_id = f"{time.strftime('%Y%m%d')}-{subset}-{gen_name}-{NONE}-{NO_SOURCES_VERSION}"
+    else:
+        run_id = f"{time.strftime('%Y%m%d')}-{subset}-{gen_name}-{mode}-k{k}{f'-cap{max_per_doc}' if max_per_doc else ''}-{PROMPT_VERSION}"
     out = RUNS / run_id
     out.mkdir(parents=True, exist_ok=True)
 
@@ -129,11 +149,12 @@ def run(qs: list[Question], all_qs: list[Question], gen_name: str, mode: str, k:
         need |= {p.id: p for p in history(q, all_qs)}
     todo = [q for q in all_qs if q.id in need]  # file order keeps turns in order
 
-    retriever = Retriever(embed_model)
-    retrieved = {}
-    for q in todo:  # retrieval does not depend on answers, so it all runs first, on one thread
-        query = retrieval_query(q, history(q, all_qs))
-        retrieved[q.id] = (query, retriever.search(query, mode, k, max_per_doc))
+    retrieved = {q.id: (None, None) for q in todo}
+    if mode != NONE:
+        retriever = Retriever(embed_model)
+        for q in todo:  # retrieval does not depend on answers, so it all runs first, on one thread
+            query = retrieval_query(q, history(q, all_qs))
+            retrieved[q.id] = (query, retriever.search(query, mode, k, max_per_doc))
 
     records: dict[str, dict] = {}
     in_subset = {q.id for q in qs}
@@ -143,11 +164,11 @@ def run(qs: list[Question], all_qs: list[Question], gen_name: str, mode: str, k:
         for q in group:
             query, hits = retrieved[q.id]
             text, thinking, r = answer(gen, q.text, hits, turns)
-            cited, bad = citations(text, hits)
+            cited, bad = citations(text, hits or [])
             records[q.id] = dict(
                 id=q.id, category=q.category, kind=q.kind, difficulty=q.difficulty, set=q.set, turn=q.turn,
                 question=q.text, retrieval_query=query, in_subset=q.id in in_subset,
-                hits=[dict(rank=h["rank"], chunk_id=h["chunk_id"], doc_id=h["doc_id"], score=round(h["score"], 4)) for h in hits],
+                hits=[dict(rank=h["rank"], chunk_id=h["chunk_id"], doc_id=h["doc_id"], score=round(h["score"], 4)) for h in hits or []],
                 answer=text, thinking_chars=thinking, cited=cited, bad_citations=bad, served_model=r.model, usage=r.usage, seconds=r.seconds, cached=r.cached,
             )
             turns.append((q.text, text))
@@ -166,8 +187,10 @@ def run(qs: list[Question], all_qs: list[Question], gen_name: str, mode: str, k:
         n_questions=len(qs), n_answered=len(todo),
         generator=dict(profile=gen.name, backend=gen.backend, model=gen.model, base_url=gen.base_url, params=gen.params,
                        served_models=sorted({r["served_model"] for r in records.values()})),
-        prompt_version=PROMPT_VERSION, system_prompt=SYSTEM,
-        retrieval=dict(mode=mode, k=k, max_per_doc=max_per_doc, embed_model=embed_model, chunks_sha=file_sha(OUT / "chunks.jsonl")),
+        prompt_version=NO_SOURCES_VERSION if mode == NONE else PROMPT_VERSION,
+        system_prompt=SYSTEM_NO_SOURCES if mode == NONE else SYSTEM,
+        retrieval=dict(mode=NONE) if mode == NONE else
+        dict(mode=mode, k=k, max_per_doc=max_per_doc, embed_model=embed_model, chunks_sha=file_sha(OUT / "chunks.jsonl")),
         new_calls=len(usage), prompt_tokens=sum(u.get("prompt_tokens", 0) for u in usage),
         completion_tokens=sum(u.get("completion_tokens", 0) for u in usage),
     )
@@ -181,7 +204,7 @@ def main() -> None:
     g.add_argument("--subset", choices=("dev", "ablation", "all"))
     g.add_argument("--ids", help="comma-separated question ids")
     ap.add_argument("--gen", default="gpt-mini", help="generator profile in rag/models.toml")
-    ap.add_argument("--mode", choices=MODES, default="hybrid")
+    ap.add_argument("--mode", choices=(*MODES, NONE), default="hybrid", help=f"{NONE}: no retrieval, no sources")
     ap.add_argument("-k", type=int, default=5)
     ap.add_argument("--max-per-doc", type=int, help="at most this many chunks from one document (default: no cap)")
     a = ap.parse_args()

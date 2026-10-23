@@ -2,7 +2,7 @@
 
 import pytest
 
-from rag.answer import SYSTEM, citations, messages_for, retrieval_query, source_block, strip_thinking, year_label
+from rag.answer import SYSTEM, SYSTEM_NO_SOURCES, citations, messages_for, retrieval_query, source_block, strip_thinking, year_label
 from rag.questions import Question
 
 HITS = [
@@ -50,3 +50,12 @@ def test_reasoning_is_cut_and_its_citations_do_not_count(reply):
 
 def test_reply_without_reasoning_is_unchanged():
     assert strip_thinking("หักได้ [1][2]") == ("หักได้ [1][2]", 0)
+
+
+def test_no_retrieval_sends_the_bare_question_under_the_no_sources_prompt():
+    msgs = messages_for("ต้องยื่นไหม", None, [("ถามก่อน", "ตอบก่อน")])
+    assert msgs[0] == {"role": "system", "content": SYSTEM_NO_SOURCES}
+    assert msgs[1:] == [{"role": "user", "content": "ถามก่อน"}, {"role": "assistant", "content": "ตอบก่อน"},
+                        {"role": "user", "content": "ต้องยื่นไหม"}]
+    assert "[n]" not in SYSTEM_NO_SOURCES and "เอกสารอ้างอิงที่ให้มา" not in SYSTEM_NO_SOURCES
+    assert citations("ตอบ [1]", []) == ([], [1])  # any [n] without sources is a bad citation
