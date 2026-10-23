@@ -325,3 +325,39 @@ Dense-wins cases read: Q0021, Q0057, Q0062, Q0065, Q0106 (first lines of the chu
 **Not done**
 - Adding k as a variant in `rag/pooled.py`, the one missing grade, the sensitivity table, reading about 10 more cases, the header test.
 - Until then E3's baseline stays an open choice between dense and hybrid k = 60.
+
+### Update to the pending investigation: cases read, tokenization finding, k test
+
+**(a) Cases read**
+- 15 of the 30 dense-wins: 5 first, then a seeded random 10 of the other 25 (seed 20261023), first lines of each chunk only.
+- In 8 of the 10 the dense 2 is outside BM25's top 50; in the other two it is at BM25 rank 24 and 31.
+- Hybrid's top 5 holds no 2 but mostly 1s: right area, wrong rule. Examples: worked examples of ป.96/2543 for Q0021 and Q0187, adopted-child edge cases for Q0277, spouse-deduction rules for Q0283. In 5 of the 10 dense itself ranks several of those chunks in its own top 10.
+- When the answer is a statute or a table (Q0192, Q0277, Q0187, Q0021), FAQ and worked-example chunks outrank it.
+- In 3 of the 10 (Q0007, Q0218, Q0251) the dense "2" is doubtful (strict 1 in two): part of dense's lead is lenient grading.
+- The header lead looks weaker: only Q0106 and Q0115 show clauses of one decree sharing a title.
+
+**(b) Why BM25 misses** (found in `rag/sparse.py`)
+- newmm tokens, no stopwords; the questions are colloquial and the chunks formal. Q0062's "พ่อแม่" shares no token with the chunk's "บิดามารดา"; "ฐานภาษี" (Q0192) is split into ฐาน + ภาษี, and ภาษี is in nearly every chunk.
+- These are query-to-text mismatches, not evidence that the content is weak. That claim stays untested: the 31 questions (9%) with no 2 anywhere in the pool (56 strict) are a different group.
+- Redundancy is real (the same FAQ topics occur in several documents), which makes lookalikes easy.
+- To test, in this order: tokenization fixes and a colloquial-to-formal mapping, then the header hypothesis.
+
+**(c) k test done** (`--variants 10 5 20 30`; k = 10 declared first)
+- 8 pairs added and graded by all three judges: pool 7,010 → 7,018 pairs. The baseline numbers did not move at three decimals.
+
+| mode (panel median, 339) | hit@5 | nDCG@10 | recall@10 |
+|---|---|---|---|
+| dense | .717 | .695 | .686 |
+| hybrid k = 60 | .699 | .664 | .608 |
+| **hybrid k = 10** | .699 | .659 | .623 |
+| hybrid k = 5 | .705 | .649 | .610 |
+| hybrid k = 20 | .693 | .668 | .624 |
+
+- k = 10 against k = 60: no measurable difference (every interval contains 0, on every metric).
+- k = 10 against dense: nDCG −0.036 [−0.055, −0.017] and recall −0.063 [−0.108, −0.019] stay outside the interval; hit@5 −0.018 [−0.053, +0.018] inside.
+- Where it goes: k = 10 recovers 16 of the 30 dense-wins but loses 9 of the 24 hybrid-wins (k = 5: 19 of 30, loses 13 of 24). The constant moves which questions win, not how many.
+- Strict: k = 5 gains hit@5 over k = 60 (+0.047 [+0.009, +0.086]) and matches dense on it (+0.009), but nDCG@10 stays 0.040 below dense.
+- **Reading:** the fusion constant is not the main cause. The remaining gap sits in what BM25 contributes (the vocabulary mismatch above).
+- Caveat: recall@10 is relative to a pool whose fused top 10 always takes some chunks from the weaker ranking.
+
+**Not done:** tokenization and synonym test, header test.

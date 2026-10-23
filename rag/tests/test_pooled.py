@@ -63,3 +63,14 @@ def test_compare_modes_and_contested_and_sources():
                 dict(id="Q1", chunk_id="c", text_sha1="1", grade=1), dict(id="Q1", chunk_id="a", text_sha1="old", grade=0)]
             for j, x in (("x", 2), ("y", 0))}
     assert contested(item, judge_grades(rows, [item])) == ["a"]
+
+
+def test_add_variant_puts_only_new_chunks_into_the_pool_and_modes_of_lists_it():
+    from rag.pooled import add_variant, modes_of, ranking
+
+    item = dict(id="Q1", pool=[dict(chunk_id="a", text_sha1="1")], rankings=dict(dense=["a"], sparse=["a"], hybrid=["a"]))
+    assert modes_of([item]) == ["dense", "sparse", "hybrid"]
+    assert add_variant(item, "hybrid-k10", ["a", "b", "b"], {"a": "1", "b": "2"}) == 1
+    assert [e["chunk_id"] for e in item["pool"]] == ["a", "b"] and ranking(item, "hybrid-k10") == ["a", "b", "b"]
+    assert modes_of([item]) == ["dense", "sparse", "hybrid", "hybrid-k10"] and ranking(item, "dense") == ["a"]
+    assert modes_of([item, dict(item, variants={})]) == ["dense", "sparse", "hybrid"]  # only variants every question has

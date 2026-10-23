@@ -5,5 +5,12 @@
   "dense",
   "sparse",
   "hybrid"
- ]
+ ],
+ "variants": [
+  10,
+  5,
+  20,
+  30
+ ],
+ "tested_variant": "hybrid-k10"
 }

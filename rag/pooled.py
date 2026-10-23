@@ -17,6 +17,10 @@ Metrics per mode (a 2 is the panel median, or all three judges when strict):
 A question with no 2 in the pool counts 0 for hit and MRR and is left out of recall and nDCG (no mode can score there);
 `no_two` lists them. Differences between modes are paired by question, with a bootstrap interval.
 
+Variants (`--variants 10 20`): hybrid again with another RRF constant k. Their top TOP is added to each question's pool, so
+the chunks they bring in are graded like the rest and every mode is scored against the same, larger pool; the baseline
+numbers move a little when the pool grows. The first variant declared is the one tested; the others are a sensitivity table.
+
 Output: rag/out/pooled/pool.jsonl (the pool and each mode's top TOP), judgments/<judge>.jsonl, summary.json
 Run   : uv run python -m rag.pooled --dry     # build the pool, print its size and the number of judge calls
         uv run python -m rag.pooled           # grade what is not graded yet with the panel, and report
@@ -38,12 +42,13 @@ from rag import chunk_version, evaluate, llm
 from rag.answer import retrieval_query
 from rag.chunk import OUT as CHUNKS, read_jsonl
 from rag.depth import SEED, batches, grade_batch
-from rag.panel import DEFAULT_PANEL, median
+from rag.panel import median
 from rag.questions import BEHAVIOURAL, Question, dev, history, load
 
 ROOT = Path(__file__).parent.parent
 OUT = ROOT / "rag" / "out" / "pooled"
 MODES = ("dense", "sparse", "hybrid")
+PANEL = ["judge-sol-or", "judge-haiku", "judge-deepseek"]  # gpt-6-sol (through OpenRouter, see models.toml), Haiku, DeepSeek
 TOP = 10  # each mode's ranking is cut here before pooling, and scored here
 BOOTSTRAP = 2000
 GRADINGS = (("median", False), ("strict", True))  # a 2 is the panel median / all three judges
@@ -72,6 +77,41 @@ def build(retriever, qs: list[Question], all_qs: list[Question], dev_ids: set[st
             pool=[dict(chunk_id=chunks[i]["chunk_id"], text_sha1=hashlib.sha1(chunks[i]["text"].encode()).hexdigest()[:12]) for i in pool],
         ))
     return out
+
+
+def ranking(item: dict, mode: str) -> list[str]:
+    """A mode's top TOP chunk ids: dense, sparse or hybrid (k = 60), or a variant such as hybrid-k10."""
+    return item["rankings"][mode] if mode in item["rankings"] else item["variants"][mode]
+
+
+def modes_of(items: list[dict]) -> list[str]:
+    """The three modes, then the variants every question has."""
+    names = set.intersection(*(set(it.get("variants", {})) for it in items)) if items else set()
+    return [*MODES, *sorted(names, key=lambda n: int(n.rsplit("k", 1)[1]))]
+
+
+def add_variant(item: dict, name: str, chunk_ids: list[str], sha: dict[str, str]) -> int:
+    """Record a variant's top chunks and put the ones the pool lacks into it; returns how many are new."""
+    item.setdefault("variants", {})[name] = chunk_ids
+    have = {e["chunk_id"] for e in item["pool"]}
+    new = [c for c in dict.fromkeys(chunk_ids) if c not in have]
+    item["pool"] += [dict(chunk_id=c, text_sha1=sha[c]) for c in new]
+    return len(new)
+
+
+def build_variants(retriever, items: list[dict], ks: list[int]) -> dict[str, int]:
+    """Hybrid with RRF constant k for each k, added to every item; {variant: new pairs added to the pools}."""
+    from rag.retrieve import rrf
+
+    ids = [c["chunk_id"] for c in retriever.chunks]
+    sha = {c["chunk_id"]: hashlib.sha1(c["text"].encode()).hexdigest()[:12] for c in retriever.chunks}
+    added = {f"hybrid-k{k}": 0 for k in ks}
+    for it in items:
+        dense, sparse, _ = retriever.rankings(it["query"])
+        for k in ks:
+            top = [ids[i] for i, _ in rrf([dense, sparse], k)[:TOP]]
+            added[f"hybrid-k{k}"] += add_variant(it, f"hybrid-k{k}", top, sha)
+    return added
 
 
 # ---------------------------------------------------------------- grading
@@ -158,9 +198,9 @@ def question_metrics(ranking: list[str], grades: dict[str, int]) -> dict[str, fl
     )
 
 
-def metrics_by_question(items: list[dict], grades: dict[str, dict[str, int]]) -> dict[str, dict[str, dict]]:
-    """{mode: {question: metrics}}."""
-    return {m: {it["id"]: question_metrics(it["rankings"][m], grades[it["id"]]) for it in items} for m in MODES}
+def metrics_by_question(items: list[dict], grades: dict[str, dict[str, int]], modes: list[str] | None = None) -> dict[str, dict[str, dict]]:
+    """{mode: {question: metrics}}, for the three modes and any variants unless `modes` says which."""
+    return {m: {it["id"]: question_metrics(ranking(it, m), grades[it["id"]]) for it in items} for m in modes or modes_of(items)}
 
 
 def mean_of(values: list[float | None]) -> float | None:
@@ -203,7 +243,8 @@ def summarise(items: list[dict], per_judge: dict[str, list[dict]]) -> dict:
     out = {}
     for name, strict in GRADINGS:
         grades = panel_grades(per_judge, items, strict)
-        by_q = metrics_by_question(items, grades)
+        modes = modes_of(items)
+        by_q = metrics_by_question(items, grades, modes)
         fields = list(next(iter(next(iter(by_q.values())).values())))
         subsets = {"all": items, "without_dev": [it for it in items if not it["dev"]]} | {
             f"category:{c}": [it for it in items if it["category"] == c] for c in sorted({it["category"] for it in items})}
@@ -212,13 +253,14 @@ def summarise(items: list[dict], per_judge: dict[str, list[dict]]) -> dict:
             ids = [it["id"] for it in sub]
             res[label] = dict(
                 n=len(ids),
-                modes={m: {f: mean_of([by_q[m][q][f] for q in ids]) for f in fields} for m in MODES},
+                modes={m: {f: mean_of([by_q[m][q][f] for q in ids]) for f in fields} for m in modes},
                 no_two=[q for q in ids if not any(v == 2 for v in grades[q].values())],
             )
             if label in ("all", "without_dev"):  # a bootstrap on a category of six questions would mean little
                 res[label]["differences"] = {
                     f"{a}-{b}": {f: paired_difference({q: by_q[a][q][f] for q in ids}, {q: by_q[b][q][f] for q in ids}) for f in fields}
-                    for a, b in combinations(MODES[::-1], 2)  # hybrid-sparse, hybrid-dense, sparse-dense
+                    for a, b in [*combinations(MODES[::-1], 2),  # hybrid-sparse, hybrid-dense, sparse-dense
+                                 *((v, b) for v in modes[3:] for b in ("hybrid", "dense"))]
                 }
         out[name] = res
     return out
@@ -232,9 +274,9 @@ def print_summary(s: dict) -> None:
                 continue
             print(f"-- {label}: {r['n']} questions, {len(r['no_two'])} with no 2 in the pool")
             fields = list(r["modes"]["dense"])
-            print(f"{'':8s}" + "".join(f"{f:>12s}" for f in fields))
-            for m in MODES:
-                print(f"{m:8s}" + "".join(f"{r['modes'][m][f]:12.3f}" if r["modes"][m][f] is not None else f"{'-':>12s}" for f in fields))
+            print(f"{'':11s}" + "".join(f"{f:>12s}" for f in fields))
+            for m in r["modes"]:
+                print(f"{m:11s}" + "".join(f"{r['modes'][m][f]:12.3f}" if r["modes"][m][f] is not None else f"{'-':>12s}" for f in fields))
             for pair, d in r.get("differences", {}).items():
                 cells = [f"{x['mean']:+.3f} [{x['lo']:+.3f},{x['hi']:+.3f}]" if x["mean"] is not None else "-" for x in d.values()]
                 print(f"{pair:>15s} " + "  ".join(cells))
@@ -249,7 +291,8 @@ def main() -> None:
     ap.add_argument("--dry", action="store_true", help="build the pool and count the calls; no LLM")
     ap.add_argument("--report", action="store_true", help="report from the saved judgments; no LLM")
     ap.add_argument("--rebuild", action="store_true", help="retrieve again even when pool.jsonl exists")
-    ap.add_argument("--judges", nargs="+", default=DEFAULT_PANEL)
+    ap.add_argument("--judges", nargs="+", default=PANEL)
+    ap.add_argument("--variants", nargs="+", type=int, metavar="K", help="add hybrid with these RRF constants to the pool (the first is the tested one)")
     a = ap.parse_args()
 
     pool_path = OUT / "pool.jsonl"
@@ -264,7 +307,16 @@ def main() -> None:
         OUT.mkdir(parents=True, exist_ok=True)
         pool_path.write_text("".join(json.dumps(i, ensure_ascii=False) + "\n" for i in items), encoding="utf-8")
         (OUT / "pool_config.json").write_text(json.dumps(dict(chunks_sha=chunk_version.current(), top=TOP, modes=MODES), indent=1), encoding="utf-8")
-    sha = json.loads((OUT / "pool_config.json").read_text(encoding="utf-8"))["chunks_sha"]
+    config = json.loads((OUT / "pool_config.json").read_text(encoding="utf-8"))
+    if a.variants:
+        from rag.retrieve import Retriever
+
+        chunk_version.require(config["chunks_sha"], "the pooled ranking pool")
+        added = build_variants(Retriever(), items, a.variants)
+        pool_path.write_text("".join(json.dumps(i, ensure_ascii=False) + "\n" for i in items), encoding="utf-8")
+        (OUT / "pool_config.json").write_text(json.dumps(config | dict(variants=a.variants, tested_variant=f"hybrid-k{a.variants[0]}"), indent=1), encoding="utf-8")
+        print("new pairs in the pools:", added)
+    sha = config["chunks_sha"]
     chunk_version.require(sha, "the pooled ranking pool")
     n_pairs = sum(len(i["pool"]) for i in items)
     print(f"{len(items)} questions ({sum(i['dev'] for i in items)} dev), {n_pairs} pairs ({n_pairs / len(items):.1f} per question) -> {pool_path}")
